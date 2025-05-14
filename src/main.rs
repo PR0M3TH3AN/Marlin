@@ -5,6 +5,7 @@ mod logging;
 mod scan;
 
 use anyhow::Result;
+use clap::Parser;             // 👈 bring in the trait that adds `.parse()`
 use cli::{Cli, Commands};
 use glob::glob;
 use rusqlite::params;
@@ -13,16 +14,16 @@ use tracing::{error, info};
 fn main() -> Result<()> {
     logging::init();
 
-    let args = Cli::parse();
+    let args = Cli::parse();  // now compiles
     let cfg = config::Config::load()?;
-    let conn = db::open(&cfg.db_path)?;
+    let mut conn = db::open(&cfg.db_path)?;   // mutable
 
     match args.command {
         Commands::Init => {
             info!("database initialised at {}", cfg.db_path.display());
         }
         Commands::Scan { path } => {
-            scan::scan_directory(&conn, &path)?;
+            scan::scan_directory(&mut conn, &path)?;     // pass &mut
         }
         Commands::Tag { pattern, tag } => {
             apply_tag(&conn, &pattern, &tag)?;
@@ -36,9 +37,8 @@ fn main() -> Result<()> {
 fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag: &str) -> Result<()> {
     let tag_id = db::ensure_tag(conn, tag)?;
     let mut stmt_file = conn.prepare("SELECT id FROM files WHERE path = ?1")?;
-    let mut stmt_insert = conn.prepare(
-        "INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)",
-    )?;
+    let mut stmt_insert =
+        conn.prepare("INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)")?;
 
     for entry in glob(pattern)? {
         match entry {

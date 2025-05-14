@@ -7,7 +7,7 @@ use tracing::{debug, info};
 use walkdir::WalkDir;
 
 /// Recursively walk `root` and upsert file metadata.
-pub fn scan_directory(conn: &Connection, root: &Path) -> Result<usize> {
+pub fn scan_directory(conn: &mut Connection, root: &Path) -> Result<usize> {
     let tx = conn.transaction()?;
     let mut stmt = tx.prepare(
         r#"
@@ -20,7 +20,10 @@ pub fn scan_directory(conn: &Connection, root: &Path) -> Result<usize> {
     )?;
 
     let mut count = 0usize;
-    for entry in WalkDir::new(root).into_iter().filter_map(Result::ok).filter(|e| e.file_type().is_file())
+    for entry in WalkDir::new(root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
     {
         let meta = fs::metadata(entry.path())?;
         let size = meta.len() as i64;
@@ -35,7 +38,8 @@ pub fn scan_directory(conn: &Connection, root: &Path) -> Result<usize> {
         debug!(file = %path_str, "indexed");
     }
 
-    tx.commit()?;
+    drop(stmt);          // <- release borrow before commit
+    tx.commit()?;        // can now move tx
     info!(indexed = count, "scan complete");
     Ok(count)
 }
