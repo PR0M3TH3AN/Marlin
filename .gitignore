@@ -1,0 +1,38 @@
+# === Rust artifacts ===
+/target/
+/Cargo.lock
+
+# === IDEs & editors ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*.bak
+*~
+
+# === OS files ===
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# === Logs and build artifacts ===
+*.log
+*.out
+*.err
+
+# === Marlin-specific ===
+/index.db
+index.db
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# === Tests and scratch ===
+/tmp/
+*.test.db
+test.db
+
+# === Environment variables and secrets ===
+.env
+.env.*
