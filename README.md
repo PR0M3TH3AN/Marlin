@@ -2,12 +2,7 @@
 
 # Marlin
 
-**Marlin** is a lightweight, metadata-driven file indexer that runs entirely on
-your computer.  
-It scans folders, stores paths and file stats in SQLite, lets you add
-hierarchical **tags** and **custom attributes**, takes automatic snapshots, and
-offers instant full-text search with FTS5.  
-Nothing ever leaves your machine.
+**Marlin** is a lightweight, metadata-driven file indexer that runs entirely on your computer.  It scans folders, stores paths and file stats in SQLite, lets you add hierarchical **tags** and **custom attributes**, takes automatic snapshots, and offers instant full-text search with FTS5.  Nothing ever leaves your machine.
 
 ---
 
