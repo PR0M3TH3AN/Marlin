@@ -1,4 +1,4 @@
-![Marlin Logo](https://raw.githubusercontent.com/PR0M3TH3AN/Marlin/refs/heads/main/assets/png/marlin_logo.png?token=GHSAT0AAAAAADDJQCM64GVJZ3TENS72WSXG2BFCC7A)
+![Marlin Logo](https://raw.githubusercontent.com/PR0M3TH3AN/Marlin/refs/heads/main/assets/png/marlin_logo.png)
 
 # Marlin
 
