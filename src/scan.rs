@@ -1,3 +1,4 @@
+// src/scan.rs  (unchanged except tiny doc tweak)
 use std::fs;
 use std::path::Path;
 
@@ -7,6 +8,7 @@ use tracing::{debug, info};
 use walkdir::WalkDir;
 
 /// Recursively walk `root` and upsert file metadata.
+/// Triggers keep the FTS table in sync.
 pub fn scan_directory(conn: &mut Connection, root: &Path) -> Result<usize> {
     let tx = conn.transaction()?;
     let mut stmt = tx.prepare(
@@ -38,8 +40,8 @@ pub fn scan_directory(conn: &mut Connection, root: &Path) -> Result<usize> {
         debug!(file = %path_str, "indexed");
     }
 
-    drop(stmt);          // <- release borrow before commit
-    tx.commit()?;        // can now move tx
+    drop(stmt);
+    tx.commit()?;
     info!(indexed = count, "scan complete");
     Ok(count)
 }

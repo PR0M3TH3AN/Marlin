@@ -1,75 +1,51 @@
-![Marlin Logo](https://raw.githubusercontent.com/PR0M3TH3AN/Marlin/refs/heads/main/assets/png/marlin_logo.png?token=GHSAT0AAAAAADDJQCM7EIFN3NMAIUGVOUQO2BE7YQA)
+![Marlin Logo](https://raw.githubusercontent.com/PR0M3TH3AN/Marlin/refs/heads/main/assets/png/marlin_logo.png)
 
 # Marlin
 
-**Marlin** is a lightweight, metadata-driven file indexer you run on your own
-machine. It scans folders, stores paths and basic stats in a local SQLite
-database, and lets you tag files from the command line.
+**Marlin** is a lightweight, metadata-driven file indexer that runs entirely on
+your computer.  
+It scans folders, stores paths and file stats in SQLite, lets you add
+hierarchical **tags** and **custom attributes**, takes automatic snapshots, and
+offers instant full-text search with FTS5.  
+Nothing ever leaves your machine.
 
-Nothing leaves your computer.
+---
 
-This repo contains the **Sprint-0 foundation**:
+## Feature highlights
 
-* XDG-aware config — no hard-coded paths  
-* Embedded SQLite migrations (WAL mode)  
-* Fast directory scanner (now accepts *multiple* paths in one call)  
-* Simple tagging tool  
-* Human-readable logging via `tracing`
+| Area           | What you get                                                                    |
+|----------------|---------------------------------------------------------------------------------|
+| **Safety**     | Timestamped backups&nbsp;`marlin backup` and one-command restore&nbsp;`marlin restore` |
+| **Upgrades**   | Automatic schema migrations + dynamic column adds                               |
+| **Indexing**   | Fast multi-path scanner (WAL mode)                                              |
+| **Metadata**   | Hierarchical tags (`project/alpha`) & key-value attributes (`reviewed=yes`)     |
+| **Search**     | Prefix-aware FTS5, optional `--exec` action per hit                              |
+| **DX / Logs**  | Readable tracing (`RUST_LOG=debug …`)                                           |
 
 ---
 
 ## How it works
 
 ```text
-┌──────────────┐  scan dir(s)    ┌─────────────┐
-│  your files  │ ───────────────▶│   SQLite    │
-└──────────────┘                 │  index.db   │
-        ▲  tag <glob> <tag>      │ files tags  │
-        └────────────────────────┴─────────────┘
+┌──────────────┐  marlin scan          ┌─────────────┐
+│  your files  │ ─────────────────────▶│   SQLite    │
+│ (any folder) │                      │  files/tags │
+└──────────────┘   tag / attr          │ attrs / FTS │
+        ▲  search / exec              └──────┬──────┘
+        └────────── backup / restore          ▼
+                                     timestamped snapshots
 ````
-
-1. `marlin scan <PATHS>...` walks each directory tree, gathers size and
-   modification time, then upserts rows into **`files`**.
-2. `marlin tag "<glob>" <tag>` looks up each matching file row and inserts
-   junction rows into **`file_tags`**. New tag names are created on the fly.
-3. You can open the DB yourself
-   (`sqlite3 ~/.local/share/marlin/index.db`) while search and GUI features
-   are still under construction.
 
 ---
 
 ## Prerequisites
 
-| What             | Why                                                 |
-| ---------------- | --------------------------------------------------- |
-| **Rust** ≥ 1.77  | Build toolchain (`rustup.rs`)                       |
-| Build essentials | `gcc`, `make`, etc. for `rusqlite`’s bundled SQLite |
+| Requirement        | Why                                    |
+| ------------------ | -------------------------------------- |
+| **Rust** ≥ 1.77    | Build toolchain (`rustup.rs`)          |
+| C build essentials | `gcc`, `make`, etc. for bundled SQLite |
 
-<details><summary>Platform notes</summary>
-
-### Windows
-
-`rustup-init.exe` installs MSVC build tools automatically.
-
-### macOS
-
-```bash
-xcode-select --install        # command-line tools
-```
-
-### Linux (Debian / Ubuntu)
-
-```bash
-sudo apt install build-essential
-```
-
-or on Fedora / RHEL
-
-```bash
-sudo dnf groupinstall "Development Tools"
-```
-
-</details>
+*(Windows/macOS: let the Rust installer pull the matching build tools.)*
 
 ---
 
@@ -78,12 +54,8 @@ sudo dnf groupinstall "Development Tools"
 ```bash
 git clone https://github.com/yourname/marlin.git
 cd marlin
-cargo build --release            # produces target/release/marlin
-```
-
-Copy the release binary somewhere on your `PATH` (optional):
-
-```bash
+cargo build --release
+# optional: add to PATH
 sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
 ```
 
@@ -92,25 +64,21 @@ sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
 ## Quick start
 
 ```bash
-# 1 – create or upgrade the database (idempotent)
-marlin init
-
-# 2 – index all common folders in one shot
-marlin scan ~/Pictures ~/Documents ~/Downloads ~/Music ~/Videos
-
-# 3 – add a tag to matching files
-marlin tag "~/Pictures/**/*.jpg" vacation
+marlin init                                        # create DB
+marlin scan ~/Pictures ~/Documents                 # index files
+marlin tag  "~/Pictures/**/*.jpg" photos/trip-2024 # add tag
+marlin attr set "~/Documents/**/*.pdf" reviewed yes
+marlin search reviewed --exec "xdg-open {}"        # open hits
+marlin backup                                      # snapshot DB
 ```
 
-The database path defaults to:
+### Database location
 
-```
-~/.local/share/marlin/index.db         # Linux
-~/Library/Application Support/marlin   # macOS
-%APPDATA%\marlin\index.db              # Windows
-```
+* **Linux**  `~/.local/share/marlin/index.db`
+* **macOS** `~/Library/Application Support/marlin/index.db`
+* **Windows** `%APPDATA%\marlin\index.db`
 
-Override with:
+Override:
 
 ```bash
 export MARLIN_DB_PATH=/path/to/custom.db
@@ -121,83 +89,96 @@ export MARLIN_DB_PATH=/path/to/custom.db
 ## CLI reference
 
 ```text
-USAGE:
-    marlin <COMMAND> [ARGS]
+marlin <COMMAND> [ARGS]
 
-COMMANDS:
-    init                              Create (or upgrade) the SQLite database
-    scan <PATHS>...                   Walk one or more directories recursively
-    tag  "<glob>" <tag>               Apply <tag> to all files matched
-
-FLAGS:
-    -h, --help                        Show this help
-    -V, --version                     Show version info
+init                             create / migrate database
+scan   <PATHS>...                walk directories & index files
+tag    "<glob>" <tag_path>       add hierarchical tag
+attr   set|ls …                  manage custom attributes
+search <query> [--exec CMD]      FTS query, optionally run CMD on each hit
+backup                           create timestamped snapshot in backups/
+restore <snapshot.db>            replace DB with snapshot
 ```
 
-| Command                     | Notes                                                                                                 |
-| --------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `marlin init`               | Safe to run repeatedly; applies pending migrations.                                                   |
-| `marlin scan <PATHS>...`    | Accepts any number of absolute/relative paths. Directories you can’t read are skipped with a warning. |
-| `marlin tag "<glob>" <tag>` | Quote the glob so your shell doesn’t expand it. Uses `glob` crate rules (`**` for recursive matches). |
+### Attribute subcommands
+
+| Command    | Example                                          |
+| ---------- | ------------------------------------------------ |
+| `attr set` | `marlin attr set "~/Docs/**/*.pdf" reviewed yes` |
+| `attr ls`  | `marlin attr ls ~/Docs/report.pdf`               |
+
+---
+
+## Backups & restore
+
+* **Create snapshot**
+
+  ```bash
+  marlin backup
+  # → ~/.local/share/marlin/backups/backup_2025-05-14_22-15-30.db
+  ```
+
+* **Restore snapshot**
+
+  ```bash
+  marlin restore ~/.local/share/marlin/backups/backup_2025-05-14_22-15-30.db
+  ```
+
+Marlin automatically takes a safety backup before any schema migration.
 
 ---
 
 ## Upgrading to a new build
 
-During development you’ll be editing source files frequently. Two common ways
-to run the updated program:
-
-### 1. Run straight from the project directory
-
 ```bash
-cargo run --release -- scan ~/Pictures
+cargo install --path . --force    # rebuild & overwrite installed binary
 ```
 
-*Cargo recompiles what changed and runs the fresh binary located in
-`target/release/marlin`.*
-
-### 2. Replace the global copy
-
-If you previously installed Marlin (e.g. into `~/.cargo/bin/` or `/usr/local/bin/`),
-overwrite it:
-
-```bash
-cargo install --path . --force
-```
-
-Now `which marlin` should print the new location, and multi-path scan works:
-
-```bash
-marlin scan ~/Pictures ~/Documents …
-```
-
-If the CLI still shows the old single-path usage (`Usage: marlin scan <PATH>`),
-you’re invoking an outdated executable—check your `PATH` and reinstall.
-
----
-
-## Development tips
-
-* Tight loop: `cargo watch -x 'run -- scan ~/Pictures'`
-* Debug logs: `RUST_LOG=debug marlin scan ~/Pictures`
-* Lint: `cargo clippy --all-targets --all-features -D warnings`
-* Tests: `cargo test`
+Backups + dynamic migrations mean your data is preserved across upgrades.
 
 ---
 
 ## Roadmap
 
-| Milestone | Coming soon                                                     |
-| --------- | --------------------------------------------------------------- |
-| **M1**    | Hierarchical tags • attributes table • `tags://` virtual folder |
-| **M2**    | Sync service • change log • diff viewer                         |
-| **M3**    | Natural-language search • visual query builder                  |
-| **M4**    | Plug-in marketplace • mobile companion (view-only)              |
+| Milestone | Focus                                              |
+| --------- | -------------------------------------------------- |
+| **M1**    | `tags://` virtual folder • attribute search DSL    |
+| **M2**    | Real-time sync service • change-log diff viewer    |
+| **M3**    | Natural-language query builder                     |
+| **M4**    | Plug-in marketplace • mobile (read-only) companion |
+
+---
+
+## Five-minute tutorial
+
+```bash
+# 0. Playground
+mkdir -p ~/marlin_demo/{Projects/{Alpha,Beta},Media/Photos,Docs}
+echo "Alpha draft"  > ~/marlin_demo/Projects/Alpha/draft.txt
+echo "Receipt PDF"  > ~/marlin_demo/Docs/receipt.pdf
+echo "fake jpg"     > ~/marlin_demo/Media/Photos/vacation.jpg
+
+# 1. Init & scan
+marlin init
+marlin scan ~/marlin_demo
+
+# 2. Tags & attributes
+marlin tag  "~/marlin_demo/Projects/Alpha/**/*"  project/alpha
+marlin attr set "~/marlin_demo/**/*.pdf" reviewed yes
+
+# 3. Search
+marlin search alpha
+marlin search reviewed --exec "echo Found: {}"
+
+# 4. Snapshot & restore
+marlin backup
+marlin restore ~/.local/share/marlin/backups/backup_YYYY-MM-DD_HH-MM-SS.db
+```
 
 ---
 
 ## License
 
-Released under the **MIT License** – see `LICENSE` for full text.
+MIT – see `LICENSE`
 
 

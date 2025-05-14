@@ -1,3 +1,4 @@
+// src/cli.rs
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -16,22 +17,40 @@ pub enum Commands {
     Init,
 
     /// Scan one or more directories and populate the file index
-    ///
-    /// Example:
-    ///     marlin scan ~/Pictures ~/Documents ~/Downloads
     Scan {
-        /// One or more directories to walk
         paths: Vec<PathBuf>,
     },
 
-    /// Tag files matching a glob pattern
-    ///
-    /// Example:
-    ///     marlin tag "~/Pictures/**/*.jpg" vacation
+    /// Tag files matching a glob pattern (hierarchical tags use `/`)
     Tag {
-        /// Glob pattern (quote to avoid shell expansion)
         pattern: String,
-        /// Tag name
-        tag: String,
+        tag_path: String,
     },
+
+    /// Manage custom attributes
+    Attr {
+        #[command(subcommand)]
+        action: AttrCmd,
+    },
+
+    /// Full-text search; `--exec CMD` runs CMD on each hit (`{}` placeholder)
+    Search {
+        query: String,
+        #[arg(long)]
+        exec: Option<String>,
+    },
+
+    /// Create a timestamped backup of the database
+    Backup,
+
+    /// Restore from a backup file (over-writes current DB)
+    Restore {
+        backup_path: PathBuf,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AttrCmd {
+    Set { pattern: String, key: String, value: String },
+    Ls  { path: PathBuf },
 }

@@ -36,3 +36,8 @@ test.db
 # === Environment variables and secrets ===
 .env
 .env.*
+
+
+# === Other ===
+repo-context.txt
+saved_config.yaml
