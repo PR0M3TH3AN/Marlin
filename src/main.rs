@@ -5,7 +5,7 @@ mod logging;
 mod scan;
 
 use anyhow::Result;
-use clap::Parser;             // 👈 bring in the trait that adds `.parse()`
+use clap::Parser;
 use cli::{Cli, Commands};
 use glob::glob;
 use rusqlite::params;
@@ -14,17 +14,24 @@ use tracing::{error, info};
 fn main() -> Result<()> {
     logging::init();
 
-    let args = Cli::parse();  // now compiles
+    let args = Cli::parse();
     let cfg = config::Config::load()?;
-    let mut conn = db::open(&cfg.db_path)?;   // mutable
+    let mut conn = db::open(&cfg.db_path)?;
 
     match args.command {
         Commands::Init => {
             info!("database initialised at {}", cfg.db_path.display());
         }
-        Commands::Scan { path } => {
-            scan::scan_directory(&mut conn, &path)?;     // pass &mut
+
+        Commands::Scan { paths } => {
+            if paths.is_empty() {
+                anyhow::bail!("At least one directory must be supplied to `scan`");
+            }
+            for path in paths {
+                scan::scan_directory(&mut conn, &path)?;
+            }
         }
+
         Commands::Tag { pattern, tag } => {
             apply_tag(&conn, &pattern, &tag)?;
         }

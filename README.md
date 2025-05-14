@@ -1,16 +1,17 @@
 # Marlin
 
-**Marlin** is a lightweight, metadata-driven file indexer you run on your own machine.
-It scans folders, stores paths and basic stats in a local SQLite database, and lets you tag
-files from the command line. Nothing leaves your computer.
+**Marlin** is a lightweight, metadata-driven file indexer you run on your own
+machine. It scans folders, stores paths and basic stats in a local SQLite
+database, and lets you tag files from the command line.
 
-The goal is to build up toward a full “smart” file explorer (hierarchical tags, custom
-attributes, search, sync, etc.). This repo contains the **Sprint 0** foundation:
+Nothing leaves your computer.
 
-* XDG-aware config — no hard-coded paths
-* Embedded SQLite migrations (WAL mode)
-* Fast directory scanner
-* Simple tagging tool
+This repo contains the **Sprint-0 foundation**:
+
+* XDG-aware config — no hard-coded paths  
+* Embedded SQLite migrations (WAL mode)  
+* Fast directory scanner (now accepts *multiple* paths in one call)  
+* Simple tagging tool  
 * Human-readable logging via `tracing`
 
 ---
@@ -18,19 +19,20 @@ attributes, search, sync, etc.). This repo contains the **Sprint 0** foundation:
 ## How it works
 
 ```text
-┌──────────────┐  scan           ┌─────────────┐
+┌──────────────┐  scan dir(s)    ┌─────────────┐
 │  your files  │ ───────────────▶│   SQLite    │
 └──────────────┘                 │  index.db   │
-        ▲  tag <pattern> <tag>   │ files tags  │
+        ▲  tag <glob> <tag>      │ files tags  │
         └────────────────────────┴─────────────┘
-```
+````
 
-1. `marlin scan <dir>` walks the directory tree with `walkdir`, gathers size and
-   modification time, then upserts rows into `files`.
-2. `marlin tag "<glob>" <tag>` resolves the glob, looks up each file row, and inserts
-   junction rows into `file_tags`. New tag names are created on the fly.
-3. You can query the database yourself (e.g. with `sqlite3 ~/.local/share/marlin/index.db`)
-   while higher-level search commands are being built.
+1. `marlin scan <PATHS>...` walks each directory tree, gathers size and
+   modification time, then upserts rows into **`files`**.
+2. `marlin tag "<glob>" <tag>` looks up each matching file row and inserts
+   junction rows into **`file_tags`**. New tag names are created on the fly.
+3. You can open the DB yourself
+   (`sqlite3 ~/.local/share/marlin/index.db`) while search and GUI features
+   are still under construction.
 
 ---
 
@@ -41,42 +43,43 @@ attributes, search, sync, etc.). This repo contains the **Sprint 0** foundation:
 | **Rust** ≥ 1.77  | Build toolchain (`rustup.rs`)                       |
 | Build essentials | `gcc`, `make`, etc. for `rusqlite`’s bundled SQLite |
 
+<details><summary>Platform notes</summary>
+
 ### Windows
 
-Rust installs MSVC build tools automatically.
-SQLite is compiled from source; nothing else to set up.
+`rustup-init.exe` installs MSVC build tools automatically.
 
 ### macOS
 
-Install Xcode Command-Line Tools:
-
 ```bash
-xcode-select --install
+xcode-select --install        # command-line tools
 ```
 
-### Linux
-
-Deb-/RPM-based distros:
+### Linux (Debian / Ubuntu)
 
 ```bash
-sudo apt install build-essential            # or
-sudo dnf groupinstall 'Development Tools'
+sudo apt install build-essential
 ```
+
+or on Fedora / RHEL
+
+```bash
+sudo dnf groupinstall "Development Tools"
+```
+
+</details>
 
 ---
 
 ## Build & install
 
-Clone then build in release mode:
-
 ```bash
 git clone https://github.com/yourname/marlin.git
 cd marlin
-cargo build --release
+cargo build --release            # produces target/release/marlin
 ```
 
-The binary is placed at `target/release/marlin`.
-Feel free to copy it into a directory on your `PATH`, e.g.:
+Copy the release binary somewhere on your `PATH` (optional):
 
 ```bash
 sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
@@ -87,25 +90,25 @@ sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
 ## Quick start
 
 ```bash
-# 1 - create the database (idempotent)
+# 1 – create or upgrade the database (idempotent)
 marlin init
 
-# 2 - index a folder
-marlin scan ~/Pictures
+# 2 – index all common folders in one shot
+marlin scan ~/Pictures ~/Documents ~/Downloads ~/Music ~/Videos
 
-# 3 - add a tag to matching files
+# 3 – add a tag to matching files
 marlin tag "~/Pictures/**/*.jpg" vacation
 ```
 
-The database defaults to:
+The database path defaults to:
 
 ```
 ~/.local/share/marlin/index.db         # Linux
 ~/Library/Application Support/marlin   # macOS
-%APPDATA%\\marlin\\index.db            # Windows
+%APPDATA%\marlin\index.db              # Windows
 ```
 
-Override with an environment variable:
+Override with:
 
 ```bash
 export MARLIN_DB_PATH=/path/to/custom.db
@@ -120,44 +123,79 @@ USAGE:
     marlin <COMMAND> [ARGS]
 
 COMMANDS:
-    init                   Create the SQLite database and run migrations
-    scan <path>            Walk a directory recursively and index all files found
-    tag  <glob> <tag>      Apply <tag> to files matched by <glob>
+    init                              Create (or upgrade) the SQLite database
+    scan <PATHS>...                   Walk one or more directories recursively
+    tag  "<glob>" <tag>               Apply <tag> to all files matched
 
 FLAGS:
-    -h, --help             Show this help
-    -V, --version          Show version info
+    -h, --help                        Show this help
+    -V, --version                     Show version info
 ```
 
-### Details
+| Command                     | Notes                                                                                                 |
+| --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `marlin init`               | Safe to run repeatedly; applies pending migrations.                                                   |
+| `marlin scan <PATHS>...`    | Accepts any number of absolute/relative paths. Directories you can’t read are skipped with a warning. |
+| `marlin tag "<glob>" <tag>` | Quote the glob so your shell doesn’t expand it. Uses `glob` crate rules (`**` for recursive matches). |
 
-| Command                     | Arguments / Notes                                                                                                   |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `marlin init`               | Safe to run more than once; upgrades the DB in place if schema changes.                                             |
-| `marlin scan <path>`        | Accepts absolute or relative paths. Ignores directories it can’t read.                                              |
-| `marlin tag "<glob>" <tag>` | Use quotes if your shell would otherwise expand the glob. Wildcards follow `glob` crate rules (`**` for recursive). |
+---
+
+## Upgrading to a new build
+
+During development you’ll be editing source files frequently. Two common ways
+to run the updated program:
+
+### 1. Run straight from the project directory
+
+```bash
+cargo run --release -- scan ~/Pictures
+```
+
+*Cargo recompiles what changed and runs the fresh binary located in
+`target/release/marlin`.*
+
+### 2. Replace the global copy
+
+If you previously installed Marlin (e.g. into `~/.cargo/bin/` or `/usr/local/bin/`),
+overwrite it:
+
+```bash
+cargo install --path . --force
+```
+
+Now `which marlin` should print the new location, and multi-path scan works:
+
+```bash
+marlin scan ~/Pictures ~/Documents …
+```
+
+If the CLI still shows the old single-path usage (`Usage: marlin scan <PATH>`),
+you’re invoking an outdated executable—check your `PATH` and reinstall.
 
 ---
 
 ## Development tips
 
-* `RUST_LOG=debug marlin scan /some/dir` shows per-file indexing messages.
-* The integration database for tests lives in `/tmp` and is wiped automatically.
-* Run `cargo clippy --all-targets --all-features -D warnings` before opening a PR.
+* Tight loop: `cargo watch -x 'run -- scan ~/Pictures'`
+* Debug logs: `RUST_LOG=debug marlin scan ~/Pictures`
+* Lint: `cargo clippy --all-targets --all-features -D warnings`
+* Tests: `cargo test`
 
 ---
 
 ## Roadmap
 
-| Milestone | What’s coming next                                         |
-| --------- | ---------------------------------------------------------- |
-| **M1**    | Hierarchical tags, attributes table, virtual `tags://` URI |
-| **M2**    | Sync service, change log, diff viewer                      |
-| **M3**    | Natural-language search, visual query builder              |
-| **M4**    | Plug-in marketplace, mobile companion (view-only)          |
+| Milestone | Coming soon                                                     |
+| --------- | --------------------------------------------------------------- |
+| **M1**    | Hierarchical tags • attributes table • `tags://` virtual folder |
+| **M2**    | Sync service • change log • diff viewer                         |
+| **M3**    | Natural-language search • visual query builder                  |
+| **M4**    | Plug-in marketplace • mobile companion (view-only)              |
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License**. See `LICENSE` for details.
+Released under the **MIT License** – see `LICENSE` for full text.
+
+

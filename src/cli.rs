@@ -14,12 +14,20 @@ pub struct Cli {
 pub enum Commands {
     /// Initialise the database (idempotent)
     Init,
-    /// Scan a directory and populate the file index
+
+    /// Scan one or more directories and populate the file index
+    ///
+    /// Example:
+    ///     marlin scan ~/Pictures ~/Documents ~/Downloads
     Scan {
-        /// Directory to walk
-        path: PathBuf,
+        /// One or more directories to walk
+        paths: Vec<PathBuf>,
     },
+
     /// Tag files matching a glob pattern
+    ///
+    /// Example:
+    ///     marlin tag "~/Pictures/**/*.jpg" vacation
     Tag {
         /// Glob pattern (quote to avoid shell expansion)
         pattern: String,
