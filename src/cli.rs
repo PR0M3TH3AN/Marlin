@@ -9,11 +9,11 @@ pub mod annotate;
 pub mod version;
 pub mod event;
 
-use clap::{Parser, Subcommand, ArgEnum, Args, CommandFactory};
+use clap::{Parser, Subcommand, CommandFactory, ValueEnum};
 use clap_complete::Shell;
 
 /// Output format for commands.
-#[derive(ArgEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug)]
 pub enum Format {
     Text,
     Json,
@@ -78,45 +78,46 @@ pub enum Commands {
     /// Generate shell completions (hidden)
     #[command(hide = true)]
     Completions {
+        /// Which shell to generate for
         #[arg(value_enum)]
         shell: Shell,
     },
 
     /// File-to-file links
     #[command(subcommand)]
-    Link   { cmd: link::LinkCmd },
+    Link(link::LinkCmd),
 
     /// Collections (groups) of files
     #[command(subcommand)]
-    Coll   { cmd: coll::CollCmd },
+    Coll(coll::CollCmd),
 
     /// Smart views (saved queries)
     #[command(subcommand)]
-    View   { cmd: view::ViewCmd },
+    View(view::ViewCmd),
 
     /// Workflow states on files
     #[command(subcommand)]
-    State  { cmd: state::StateCmd },
+    State(state::StateCmd),
 
     /// TODO/tasks management
     #[command(subcommand)]
-    Task   { cmd: task::TaskCmd },
+    Task(task::TaskCmd),
 
     /// Reminders on files
     #[command(subcommand)]
-    Remind { cmd: remind::RemindCmd },
+    Remind(remind::RemindCmd),
 
     /// File annotations and highlights
     #[command(subcommand)]
-    Annotate { cmd: annotate::AnnotateCmd },
+    Annotate(annotate::AnnotateCmd),
 
     /// Version diffs
     #[command(subcommand)]
-    Version { cmd: version::VersionCmd },
+    Version(version::VersionCmd),
 
     /// Calendar events & timelines
     #[command(subcommand)]
-    Event { cmd: event::EventCmd },
+    Event(event::EventCmd),
 }
 
 #[derive(Subcommand, Debug)]

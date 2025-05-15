@@ -2,8 +2,8 @@
 
 # Marlin
 
-**Marlin** is a lightweight, metadata-driven file indexer that runs 100 % on your computer. It scans folders, stores paths and file stats in SQLite, lets you attach hierarchical **tags** and **custom attributes**, takes automatic snapshots, and offers instant full-text search via FTS5.
-*No cloud, no telemetry – your data never leaves the machine.*
+**Marlin** is a lightweight, metadata-driven file indexer that runs 100 % on your computer. It scans folders, stores paths and file stats in SQLite, lets you attach hierarchical **tags** and **custom attributes**, takes automatic snapshots, and offers instant full-text search via FTS5.  
+_No cloud, no telemetry – your data never leaves the machine._
 
 ---
 
@@ -30,7 +30,7 @@
         ▲  search / exec              └──────┬──────┘
         └────────── backup / restore          ▼
                                      timestamped snapshots
-```
+````
 
 ---
 
@@ -51,7 +51,9 @@ macOS & Windows users: let the Rust installer pull the matching build tools.
 git clone https://github.com/yourname/marlin.git
 cd marlin
 cargo build --release
-sudo install -Dm755 target/release/marlin /usr/local/bin/marlin  # optional
+
+# (Optional) Install the binary into your PATH:
+sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
 ```
 
 ---
@@ -61,11 +63,27 @@ sudo install -Dm755 target/release/marlin /usr/local/bin/marlin  # optional
 ```bash
 marlin init                                        # create DB (idempotent)
 marlin scan ~/Pictures ~/Documents                 # index files
-marlin tag  "~/Pictures/**/*.jpg" photos/trip-2024 # add tag
-marlin attr set "~/Documents/**/*.pdf" reviewed yes
+marlin tag  ~/Pictures/**/*.jpg photos/trip-2024   # add hierarchical tag
+marlin attr set ~/Documents/**/*.pdf reviewed yes  # set custom attribute
 marlin search reviewed --exec "xdg-open {}"        # open matches
 marlin backup                                      # snapshot DB
 ```
+
+---
+
+### Enable shell completions (optional but handy)
+
+```bash
+# create the directory if needed
+mkdir -p ~/.config/bash_completion.d
+
+# dump Bash completion
+marlin completions bash > ~/.config/bash_completion.d/marlin
+```
+
+For Zsh, Fish, etc., redirect into your shell’s completions folder.
+
+---
 
 ### Database location
 
@@ -89,37 +107,39 @@ marlin <COMMAND> [ARGS]
 init                             create / migrate database
 scan   <PATHS>...                walk directories & index files
 tag    "<glob>" <tag_path>       add hierarchical tag
-attr   set|ls …                  manage custom attributes
-search <query> [--exec CMD]      FTS query, optionally run CMD on each hit
+attr   set <pattern> <key> <value>  manage custom attributes
+attr   ls <path>
+search <query> [--exec CMD]      FTS5 query, optionally run CMD on each hit
 backup                           create timestamped snapshot in backups/
 restore <snapshot.db>            replace DB with snapshot
+completions <shell>              generate shell completions
 ```
 
 ### Attribute subcommands
 
-| Command    | Example                                          |
-| ---------- | ------------------------------------------------ |
-| `attr set` | `marlin attr set "~/Docs/**/*.pdf" reviewed yes` |
-| `attr ls`  | `marlin attr ls ~/Docs/report.pdf`               |
+| Command    | Example                                        |
+| ---------- | ---------------------------------------------- |
+| `attr set` | `marlin attr set ~/Docs/**/*.pdf reviewed yes` |
+| `attr ls`  | `marlin attr ls ~/Docs/report.pdf`             |
 
 ---
 
 ## Backups & restore
 
-*Create snapshot*
+**Create snapshot**
 
 ```bash
 marlin backup
 # → ~/.local/share/marlin/backups/backup_2025-05-14_22-15-30.db
 ```
 
-*Restore snapshot*
+**Restore snapshot**
 
 ```bash
 marlin restore ~/.local/share/marlin/backups/backup_2025-05-14_22-15-30.db
 ```
 
-Marlin also takes an **automatic safety backup before every schema migration**.
+Marlin also takes an **automatic safety backup before every non-init command**.
 
 ---
 
@@ -133,39 +153,26 @@ The versioned migration system preserves your data across upgrades.
 
 ---
 
-## Roadmap
-
-See [`ROADMAP.md`](./ROADMAP.md) for the full development plan.
-
----
-
 ## Five-Minute Quickstart
 
-Paste & run each block in your terminal.
-
----
+Just paste & run each block in your terminal.
 
 ### 0 Prepare, build & install
 
 ```bash
 cd ~/Documents/GitHub/Marlin
 cargo build --release
-
 sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
-````
+```
 
 > Now `marlin` is available everywhere.
 
----
-
-### 1 Enable shell completion (optional but handy)
+### 1 Enable shell completion
 
 ```bash
-marlin completions bash  > ~/.config/bash_completion.d/marlin
-# or for zsh / fish, similarly...
+mkdir -p ~/.config/bash_completion.d
+marlin completions bash > ~/.config/bash_completion.d/marlin
 ```
-
----
 
 ### 2 Prepare a clean demo directory
 
@@ -179,8 +186,6 @@ printf "Receipt PDF\n"  > ~/marlin_demo/Docs/receipt.pdf
 printf "fake jpg\n"     > ~/marlin_demo/Media/Photos/vacation.jpg
 ```
 
----
-
 ### 3 Initialize & index files
 
 ```bash
@@ -193,22 +198,18 @@ marlin --verbose scan ~/marlin_demo
 
 > Only changed files get re-indexed on subsequent runs.
 
----
-
 ### 4 Attach tags & attributes
 
 ```bash
 # Tag everything under “Alpha”
-marlin tag "~/marlin_demo/Projects/Alpha/**/*" project/alpha
+marlin tag ~/marlin_demo/Projects/Alpha/**/* project/alpha
 
 # Mark all PDFs as reviewed
-marlin attr set "~/marlin_demo/**/*.pdf" reviewed=yes
+marlin attr set ~/marlin_demo/**/*.pdf reviewed yes
 
 # Output as JSON instead:
-marlin --format=json attr set "~/marlin_demo/**/*.pdf" reviewed=yes
+marlin --format=json attr set ~/marlin_demo/**/*.pdf reviewed yes
 ```
-
----
 
 ### 5 Search your index
 
@@ -222,8 +223,6 @@ marlin search "reviewed AND pdf"
 # Run a command on each hit:
 marlin search reviewed --exec 'echo HIT → {}'
 ```
-
----
 
 ### 6 Backup & restore
 
@@ -241,8 +240,7 @@ marlin restore "$snap"
 marlin search reviewed
 ```
 
-> Backups live under `~/.local/share/marlin/backups` by default.
-
+---
 
 ##### What you just exercised
 
@@ -257,9 +255,7 @@ marlin search reviewed
 | `marlin backup`   | Timestamped snapshot of the DB            |
 | `marlin restore`  | Replace live DB with a chosen snapshot    |
 
-That’s the complete surface area of Marlin today—feel free to play around or
-point the scanner at real folders.
-
+That’s the complete surface area of Marlin today—feel free to play around or point the scanner at real folders.
 
 ---
 

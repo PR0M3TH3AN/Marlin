@@ -6,7 +6,7 @@ mod logging;
 mod scan;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, CommandFactory};
 use clap_complete::{generate, Shell};
 use glob::Pattern;
 use rusqlite::params;
@@ -26,10 +26,11 @@ fn main() -> Result<()> {
     }
     logging::init();
 
-    // Handle shell completions as a hidden command
-    if let Commands::Completions { shell } = args.command {
+    // If the user asked for completions, generate and exit immediately.
+    if let Commands::Completions { shell } = &args.command {
         let mut cmd = Cli::command();
-        generate(shell, &mut cmd, "marlin", &mut io::stdout());
+        // Shell is Copy so we can deref it safely
+        generate(*shell, &mut cmd, "marlin", &mut io::stdout());
         return Ok(());
     }
 
@@ -47,8 +48,11 @@ fn main() -> Result<()> {
     // Open (and migrate) the DB
     let mut conn = db::open(&cfg.db_path)?;
 
-    // Dispatch
+    // Dispatch all commands
     match args.command {
+        Commands::Completions { .. } => {
+            // no-op, already handled above
+        }
         Commands::Init => {
             info!("Database initialised at {}", cfg.db_path.display());
         }
@@ -90,15 +94,15 @@ fn main() -> Result<()> {
             info!("Successfully opened restored database.");
         }
         // new domains delegate to their run() functions
-        Commands::Link   { cmd } => cli::link::run(&cmd, &mut conn, args.format)?,
-        Commands::Coll   { cmd } => cli::coll::run(&cmd, &mut conn, args.format)?,
-        Commands::View   { cmd } => cli::view::run(&cmd, &mut conn, args.format)?,
-        Commands::State  { cmd } => cli::state::run(&cmd, &mut conn, args.format)?,
-        Commands::Task   { cmd } => cli::task::run(&cmd, &mut conn, args.format)?,
-        Commands::Remind { cmd } => cli::remind::run(&cmd, &mut conn, args.format)?,
-        Commands::Annotate { cmd } => cli::annotate::run(&cmd, &mut conn, args.format)?,
-        Commands::Version  { cmd } => cli::version::run(&cmd, &mut conn, args.format)?,
-        Commands::Event    { cmd } => cli::event::run(&cmd, &mut conn, args.format)?,
+        Commands::Link(link_cmd)   => cli::link::run(&link_cmd, &mut conn, args.format)?,
+        Commands::Coll(coll_cmd)   => cli::coll::run(&coll_cmd, &mut conn, args.format)?,
+        Commands::View(view_cmd)   => cli::view::run(&view_cmd, &mut conn, args.format)?,
+        Commands::State(state_cmd) => cli::state::run(&state_cmd, &mut conn, args.format)?,
+        Commands::Task(task_cmd)   => cli::task::run(&task_cmd, &mut conn, args.format)?,
+        Commands::Remind(rm_cmd)   => cli::remind::run(&rm_cmd, &mut conn, args.format)?,
+        Commands::Annotate(an_cmd) => cli::annotate::run(&an_cmd, &mut conn, args.format)?,
+        Commands::Version(v_cmd)   => cli::version::run(&v_cmd, &mut conn, args.format)?,
+        Commands::Event(e_cmd)     => cli::event::run(&e_cmd, &mut conn, args.format)?,
     }
 
     Ok(())
@@ -117,7 +121,11 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
         conn.prepare("INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)")?;
 
     let mut count = 0;
-    for entry in WalkDir::new(&root).into_iter().filter_map(Result::ok).filter(|e| e.file_type().is_file()) {
+    for entry in WalkDir::new(&root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+    {
         let path_str = entry.path().to_string_lossy();
         debug!("testing path: {}", path_str);
         if !pat.matches(&path_str) {
