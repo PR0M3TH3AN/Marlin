@@ -145,25 +145,25 @@ Paste & run each block in your terminal.
 
 ---
 
-### 0 Prepare & build
+### 0 Prepare, build & install
 
 ```bash
-# Clone or cd into your Marlin repo
 cd ~/Documents/GitHub/Marlin
-
-# Build the release binary
 cargo build --release
-```
+
+sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
+````
+
+> Now `marlin` is available everywhere.
 
 ---
 
-### 1 Install on your PATH
+### 1 Enable shell completion (optional but handy)
 
 ```bash
-sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
+marlin completions bash  > ~/.config/bash_completion.d/marlin
+# or for zsh / fish, similarly...
 ```
-
-> Now `marlin` is available everywhere.
 
 ---
 
@@ -184,16 +184,14 @@ printf "fake jpg\n"     > ~/marlin_demo/Media/Photos/vacation.jpg
 ### 3 Initialize & index files
 
 ```bash
-# Use --verbose if you want full debug traces:
 marlin init
 marlin scan ~/marlin_demo
 
-# or, to see every path tested:
-marlin --verbose init
+# show every path tested:
 marlin --verbose scan ~/marlin_demo
 ```
 
-> **Tip:** Rerun `marlin scan` after you add/remove/modify files; only changed files get re-indexed.
+> Only changed files get re-indexed on subsequent runs.
 
 ---
 
@@ -204,11 +202,10 @@ marlin --verbose scan ~/marlin_demo
 marlin tag "~/marlin_demo/Projects/Alpha/**/*" project/alpha
 
 # Mark all PDFs as reviewed
-marlin attr set "~/marlin_demo/**/*.pdf" reviewed yes
+marlin attr set "~/marlin_demo/**/*.pdf" reviewed=yes
 
-# (or with debug)
-marlin --verbose tag "~/marlin_demo/Projects/Alpha/**/*" project/alpha
-marlin --verbose attr set "~/marlin_demo/**/*.pdf" reviewed yes
+# Output as JSON instead:
+marlin --format=json attr set "~/marlin_demo/**/*.pdf" reviewed=yes
 ```
 
 ---
@@ -219,37 +216,33 @@ marlin --verbose attr set "~/marlin_demo/**/*.pdf" reviewed yes
 # By tag or filename
 marlin search alpha
 
-# Combined terms (AND across path+attrs)
+# Combined terms:
 marlin search "reviewed AND pdf"
 
-# Run a command on each hit
-marlin search reviewed --exec "echo HIT → {}"
-
-# If things aren’t matching, add --verbose to see the underlying FTS query:
-marlin --verbose search "reviewed AND pdf"
+# Run a command on each hit:
+marlin search reviewed --exec 'echo HIT → {}'
 ```
-
-> `{}` in `--exec` is replaced with each file’s path.
 
 ---
 
 ### 6 Backup & restore
 
 ```bash
-# Snapshot and store its name
+# Snapshot
 snap=$(marlin backup | awk '{print $NF}')
 
-# Simulate data loss
+# Simulate loss
 rm ~/.local/share/marlin/index.db
 
-# Restore instantly
+# Restore
 marlin restore "$snap"
 
-# Verify your files still show up
+# Verify
 marlin search reviewed
 ```
 
 > Backups live under `~/.local/share/marlin/backups` by default.
+
 
 ##### What you just exercised
 

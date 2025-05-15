@@ -6,48 +6,55 @@ mod logging;
 mod scan;
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand};
+use clap_complete::{generate, Shell};
 use glob::Pattern;
 use rusqlite::params;
 use shellexpand;
 use shlex;
-use std::{env, path::PathBuf, process::Command};
+use std::{env, io, path::PathBuf, process::Command};
 use tracing::{debug, error, info};
 use walkdir::WalkDir;
 
-use cli::{AttrCmd, Cli, Commands};
+use cli::{Cli, Commands, Format};
 
 fn main() -> Result<()> {
     // Parse CLI and bootstrap logging
-    let args = Cli::parse();
+    let mut args = Cli::parse();
     if args.verbose {
-        // switch on debug‐level logs
         env::set_var("RUST_LOG", "debug");
     }
     logging::init();
 
+    // Handle shell completions as a hidden command
+    if let Commands::Completions { shell } = args.command {
+        let mut cmd = Cli::command();
+        generate(shell, &mut cmd, "marlin", &mut io::stdout());
+        return Ok(());
+    }
+
     let cfg = config::Config::load()?;
 
     // Backup before any non-init, non-backup/restore command
-    if !matches!(args.command, Commands::Init | Commands::Backup | Commands::Restore { .. }) {
-        match db::backup(&cfg.db_path) {
+    match &args.command {
+        Commands::Init | Commands::Backup | Commands::Restore { .. } => {}
+        _ => match db::backup(&cfg.db_path) {
             Ok(path) => info!("Pre-command auto-backup created at {}", path.display()),
-            Err(e) => error!("Failed to create pre-command auto-backup: {}", e),
-        }
+            Err(e)   => error!("Failed to create pre-command auto-backup: {}", e),
+        },
     }
 
     // Open (and migrate) the DB
     let mut conn = db::open(&cfg.db_path)?;
 
+    // Dispatch
     match args.command {
         Commands::Init => {
             info!("Database initialised at {}", cfg.db_path.display());
         }
-
         Commands::Scan { paths } => {
-            // if none given, default to current dir
             let scan_paths = if paths.is_empty() {
-                vec![env::current_dir()?]
+                vec![std::env::current_dir()?]
             } else {
                 paths
             };
@@ -55,38 +62,43 @@ fn main() -> Result<()> {
                 scan::scan_directory(&mut conn, &p)?;
             }
         }
-
         Commands::Tag { pattern, tag_path } => {
             apply_tag(&conn, &pattern, &tag_path)?;
         }
-
         Commands::Attr { action } => match action {
-            AttrCmd::Set { pattern, key, value } => {
+            cli::AttrCmd::Set { pattern, key, value } => {
                 attr_set(&conn, &pattern, &key, &value)?;
             }
-            AttrCmd::Ls { path } => {
+            cli::AttrCmd::Ls { path } => {
                 attr_ls(&conn, &path)?;
             }
         },
-
         Commands::Search { query, exec } => {
             run_search(&conn, &query, exec)?;
         }
-
         Commands::Backup => {
             let path = db::backup(&cfg.db_path)?;
             println!("Backup created: {}", path.display());
         }
-
         Commands::Restore { backup_path } => {
             drop(conn);
             db::restore(&backup_path, &cfg.db_path)
                 .with_context(|| format!("Failed to restore DB from {}", backup_path.display()))?;
-            println!("Restored DB file from {}", backup_path.display());
+            println!("Restored DB from {}", backup_path.display());
             db::open(&cfg.db_path)
                 .with_context(|| format!("Could not open restored DB at {}", cfg.db_path.display()))?;
-            info!("Successfully opened and processed restored database.");
+            info!("Successfully opened restored database.");
         }
+        // new domains delegate to their run() functions
+        Commands::Link   { cmd } => cli::link::run(&cmd, &mut conn, args.format)?,
+        Commands::Coll   { cmd } => cli::coll::run(&cmd, &mut conn, args.format)?,
+        Commands::View   { cmd } => cli::view::run(&cmd, &mut conn, args.format)?,
+        Commands::State  { cmd } => cli::state::run(&cmd, &mut conn, args.format)?,
+        Commands::Task   { cmd } => cli::task::run(&cmd, &mut conn, args.format)?,
+        Commands::Remind { cmd } => cli::remind::run(&cmd, &mut conn, args.format)?,
+        Commands::Annotate { cmd } => cli::annotate::run(&cmd, &mut conn, args.format)?,
+        Commands::Version  { cmd } => cli::version::run(&cmd, &mut conn, args.format)?,
+        Commands::Event    { cmd } => cli::event::run(&cmd, &mut conn, args.format)?,
     }
 
     Ok(())
