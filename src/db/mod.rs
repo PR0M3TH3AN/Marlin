@@ -31,7 +31,7 @@ pub fn open<P: AsRef<Path>>(db_path: P) -> Result<Connection> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     conn.pragma_update(None, "foreign_keys", "ON")?;
 
-    // Apply migrations
+    // Apply migrations (drops & recreates all FTS triggers)
     apply_migrations(&mut conn)?;
 
     Ok(conn)
@@ -40,6 +40,7 @@ pub fn open<P: AsRef<Path>>(db_path: P) -> Result<Connection> {
 /* ─── migration runner ──────────────────────────────────────────────── */
 
 fn apply_migrations(conn: &mut Connection) -> Result<()> {
+    // Ensure schema_version table
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_version (
              version     INTEGER PRIMARY KEY,
@@ -47,10 +48,11 @@ fn apply_migrations(conn: &mut Connection) -> Result<()> {
          );",
     )?;
 
-    // legacy patch (ignore if already exists)
+    // Legacy patch (ignore if exists)
     let _ = conn.execute("ALTER TABLE schema_version ADD COLUMN applied_on TEXT", []);
 
     let tx = conn.transaction()?;
+
     for (fname, sql) in MIGRATIONS {
         let version: i64 = fname
             .split('_')
@@ -67,25 +69,25 @@ fn apply_migrations(conn: &mut Connection) -> Result<()> {
             .optional()?;
 
         if already.is_some() {
-            debug!("migration {fname} already applied");
+            debug!("migration {} already applied", fname);
             continue;
         }
 
-        info!("applying migration {fname}");
-        // For debugging:
+        info!("applying migration {}", fname);
         println!(
             "\nSQL SCRIPT FOR MIGRATION: {}\nBEGIN SQL >>>\n{}\n<<< END SQL\n",
             fname, sql
         );
 
         tx.execute_batch(sql)
-            .with_context(|| format!("could not apply migration {fname}"))?;
+            .with_context(|| format!("could not apply migration {}", fname))?;
 
         tx.execute(
             "INSERT INTO schema_version (version, applied_on) VALUES (?1, ?2)",
             params![version, Local::now().to_rfc3339()],
         )?;
     }
+
     tx.commit()?;
     Ok(())
 }

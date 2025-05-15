@@ -1,3 +1,4 @@
+-- src/db/migrations/0002_update_fts_and_triggers.sql
 PRAGMA foreign_keys = ON;
 PRAGMA journal_mode = WAL;  -- Use WAL for better concurrency
 

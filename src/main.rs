@@ -21,6 +21,7 @@ fn main() -> Result<()> {
     // Parse CLI and bootstrap logging
     let args = Cli::parse();
     if args.verbose {
+        // switch on debug‐level logs
         env::set_var("RUST_LOG", "debug");
     }
     logging::init();
@@ -44,10 +45,13 @@ fn main() -> Result<()> {
         }
 
         Commands::Scan { paths } => {
-            if paths.is_empty() {
-                anyhow::bail!("At least one directory must be supplied to `scan`");
-            }
-            for p in paths {
+            // if none given, default to current dir
+            let scan_paths = if paths.is_empty() {
+                vec![env::current_dir()?]
+            } else {
+                paths
+            };
+            for p in scan_paths {
                 scan::scan_directory(&mut conn, &p)?;
             }
         }
@@ -101,11 +105,7 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
         conn.prepare("INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)")?;
 
     let mut count = 0;
-    for entry in WalkDir::new(&root)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_file())
-    {
+    for entry in WalkDir::new(&root).into_iter().filter_map(Result::ok).filter(|e| e.file_type().is_file()) {
         let path_str = entry.path().to_string_lossy();
         debug!("testing path: {}", path_str);
         if !pat.matches(&path_str) {
@@ -155,11 +155,7 @@ fn attr_set(
     let mut stmt_file = conn.prepare("SELECT id FROM files WHERE path = ?1")?;
     let mut count = 0;
 
-    for entry in WalkDir::new(&root)
-        .into_iter()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_file())
-    {
+    for entry in WalkDir::new(&root).into_iter().filter_map(Result::ok).filter(|e| e.file_type().is_file()) {
         let path_str = entry.path().to_string_lossy();
         debug!("testing attr path: {}", path_str);
         if !pat.matches(&path_str) {
@@ -237,9 +233,7 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
         .collect();
 
     if let Some(cmd_tpl) = exec {
-        // Exec-on-hits logic
         let mut ran_without_placeholder = false;
-        // If no hits and no placeholder, run once
         if hits.is_empty() && !cmd_tpl.contains("{}") {
             if let Some(mut parts) = shlex::split(&cmd_tpl) {
                 if !parts.is_empty() {
@@ -252,7 +246,6 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
             }
             ran_without_placeholder = true;
         }
-        // Otherwise, run per hit
         if !ran_without_placeholder {
             for path in hits {
                 let quoted = shlex::try_quote(&path).unwrap_or(path.clone().into());
@@ -291,7 +284,7 @@ fn escape_fts_query_term(term: &str) -> String {
     if term.contains(|c: char| c.is_whitespace() || "-:()\"".contains(c))
         || ["AND","OR","NOT","NEAR"].contains(&term.to_uppercase().as_str())
     {
-        format!("\"{}\"", term.replace('"', "\"\""))  
+        format!("\"{}\"", term.replace('"', "\"\""))
     } else {
         term.to_string()
     }
