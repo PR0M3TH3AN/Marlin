@@ -4,53 +4,94 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::Local;
 use rusqlite::{
     backup::{Backup, StepResult},
-    params, Connection, OpenFlags,
+    params,
+    Connection,
+    OpenFlags,
+    OptionalExtension,
 };
+use tracing::{debug, info};
 
-const MIGRATIONS_SQL: &str = include_str!("migrations.sql");
+/// Embed every numbered migration file here.
+const MIGRATIONS: &[(&str, &str)] = &[
+    ("0001_initial_schema.sql", include_str!("migrations/0001_initial_schema.sql")),
+    ("0002_update_fts_and_triggers.sql", include_str!("migrations/0002_update_fts_and_triggers.sql")),
+];
 
-/// Open (or create) the DB, apply migrations, add any missing columns,
-/// and rebuild the FTS index if needed.
+/* ─── connection bootstrap ──────────────────────────────────────────── */
+
 pub fn open<P: AsRef<Path>>(db_path: P) -> Result<Connection> {
-    let conn = Connection::open(&db_path)?;
+    let db_path_ref = db_path.as_ref();
+    let mut conn = Connection::open(db_path_ref)
+        .with_context(|| format!("failed to open DB at {}", db_path_ref.display()))?;
+
     conn.pragma_update(None, "journal_mode", "WAL")?;
-    conn.execute_batch(MIGRATIONS_SQL)?;
+    conn.pragma_update(None, "foreign_keys", "ON")?;
 
-    // example of dynamic column addition: files.hash TEXT
-    ensure_column(&conn, "files", "hash", "TEXT")?;
+    // Apply migrations
+    apply_migrations(&mut conn)?;
 
-    // ensure FTS picks up tokenizer / prefix changes
-    conn.execute("INSERT INTO files_fts(files_fts) VALUES('rebuild')", [])?;
     Ok(conn)
 }
 
-/// Add a column if it does not already exist.
-fn ensure_column(conn: &Connection, table: &str, col: &str, ddl_type: &str) -> Result<()> {
-    // PRAGMA table_info returns rows with (cid, name, type, ...)
-    let mut exists = false;
-    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table});"))?;
-    let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
-    for name in rows.flatten() {
-        if name == col {
-            exists = true;
-            break;
-        }
-    }
+/* ─── migration runner ──────────────────────────────────────────────── */
 
-    if !exists {
-        conn.execute(
-            &format!("ALTER TABLE {table} ADD COLUMN {col} {ddl_type};"),
-            [],
+fn apply_migrations(conn: &mut Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS schema_version (
+             version     INTEGER PRIMARY KEY,
+             applied_on  TEXT NOT NULL
+         );",
+    )?;
+
+    // legacy patch (ignore if already exists)
+    let _ = conn.execute("ALTER TABLE schema_version ADD COLUMN applied_on TEXT", []);
+
+    let tx = conn.transaction()?;
+    for (fname, sql) in MIGRATIONS {
+        let version: i64 = fname
+            .split('_')
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("migration filenames start with number");
+
+        let already: Option<i64> = tx
+            .query_row(
+                "SELECT version FROM schema_version WHERE version = ?1",
+                [version],
+                |r| r.get(0),
+            )
+            .optional()?;
+
+        if already.is_some() {
+            debug!("migration {fname} already applied");
+            continue;
+        }
+
+        info!("applying migration {fname}");
+        // For debugging:
+        println!(
+            "\nSQL SCRIPT FOR MIGRATION: {}\nBEGIN SQL >>>\n{}\n<<< END SQL\n",
+            fname, sql
+        );
+
+        tx.execute_batch(sql)
+            .with_context(|| format!("could not apply migration {fname}"))?;
+
+        tx.execute(
+            "INSERT INTO schema_version (version, applied_on) VALUES (?1, ?2)",
+            params![version, Local::now().to_rfc3339()],
         )?;
     }
+    tx.commit()?;
     Ok(())
 }
 
-/// Ensure a (possibly hierarchical) tag exists and return the leaf tag id.
+/* ─── helpers ───────────────────────────────────────────────────────── */
+
 pub fn ensure_tag_path(conn: &Connection, path: &str) -> Result<i64> {
     let mut parent: Option<i64> = None;
     for segment in path.split('/').filter(|s| !s.is_empty()) {
@@ -68,13 +109,11 @@ pub fn ensure_tag_path(conn: &Connection, path: &str) -> Result<i64> {
     parent.ok_or_else(|| anyhow::anyhow!("empty tag path"))
 }
 
-/// Look up `files.id` by absolute path.
 pub fn file_id(conn: &Connection, path: &str) -> Result<i64> {
     conn.query_row("SELECT id FROM files WHERE path = ?1", [path], |r| r.get(0))
         .map_err(|_| anyhow::anyhow!("file not indexed: {}", path))
 }
 
-/// Insert or update an attribute.
 pub fn upsert_attr(conn: &Connection, file_id: i64, key: &str, value: &str) -> Result<()> {
     conn.execute(
         r#"
@@ -87,31 +126,27 @@ pub fn upsert_attr(conn: &Connection, file_id: i64, key: &str, value: &str) -> R
     Ok(())
 }
 
-/// Create a **consistent snapshot** of the DB and return the backup path.
+/* ─── backup / restore ──────────────────────────────────────────────── */
+
 pub fn backup<P: AsRef<Path>>(db_path: P) -> Result<PathBuf> {
     let src = db_path.as_ref();
     let dir = src
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("invalid DB path"))?
+        .ok_or_else(|| anyhow::anyhow!("invalid DB path: {}", src.display()))?
         .join("backups");
     fs::create_dir_all(&dir)?;
 
     let stamp = Local::now().format("%Y-%m-%d_%H-%M-%S");
     let dst = dir.join(format!("backup_{stamp}.db"));
 
-    // open connections: src read-only, dst writable
     let src_conn = Connection::open_with_flags(src, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let mut dst_conn = Connection::open(&dst)?;
 
-    // run online backup
-    let mut bk = Backup::new(&src_conn, &mut dst_conn)?;
+    let bk = Backup::new(&src_conn, &mut dst_conn)?;
     while let StepResult::More = bk.step(100)? {}
-    // Backup finalised when `bk` is dropped.
-
     Ok(dst)
 }
 
-/// Replace the live DB file with a snapshot (caller must have closed handles).
 pub fn restore<P: AsRef<Path>>(backup_path: P, live_db_path: P) -> Result<()> {
     fs::copy(&backup_path, &live_db_path)?;
     Ok(())

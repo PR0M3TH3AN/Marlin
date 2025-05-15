@@ -1,12 +1,15 @@
 // src/cli.rs
 use std::path::PathBuf;
-
 use clap::{Parser, Subcommand};
 
 /// Marlin – metadata-driven file explorer (CLI utilities)
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
 pub struct Cli {
+    /// Enable debug logging and extra output
+    #[arg(long)]
+    pub verbose: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
