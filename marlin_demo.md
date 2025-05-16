@@ -1,8 +1,41 @@
+# Quick start & Demo
+
+## Quick start
+
+```bash
+# initialize the demo database
+marlin init
+
+# index only your demo folder
+marlin scan ~/marlin_demo_complex
+
+# tag all markdown in your demo Projects as “project/md”
+marlin tag "~/marlin_demo_complex/Projects/**/*.md" project/md
+
+# mark your demo reports as reviewed
+marlin attr set "~/marlin_demo_complex/Reports/*.pdf" reviewed yes
+
+# search for any reviewed files
+marlin search "attr:reviewed=yes"
+
+# snapshot the demo database
+marlin backup
+
+# test linking within your demo
+touch ~/marlin_demo_complex/foo.txt ~/marlin_demo_complex/bar.txt
+marlin scan ~/marlin_demo_complex
+foo=~/marlin_demo_complex/foo.txt
+bar=~/marlin_demo_complex/bar.txt
+marlin link add "$foo" "$bar"
+marlin link list "$foo"
+marlin link backlinks "$bar"
+````
+
+---
+
 # Marlin Demo
 
 Here’s a little “complex‐demo” you can spin up to exercise tags, attributes, FTS queries, `--exec` hooks, backups & restores. Just copy–paste each block into your terminal:
-
----
 
 ### 0 Create the demo folder and some files
 
@@ -149,17 +182,3 @@ marlin restore "$snap"
 # Confirm you still see “TODO”
 marlin search TODO
 ```
-
----
-
-That gives you:
-
-* **wide folder structures** (Projects, Logs, Reports, Scripts, Media)
-* **hierarchical tags** you can mix and match
-* **key-value attributes** to flag state & review
-* **FTS5 queries** with AND/OR/NOT
-* **`--exec` hooks** to trigger external commands
-* **JSON output** for programmatic gluing
-* **backups & restores** to guard your data
-
-Have fun playing around!

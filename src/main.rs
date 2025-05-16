@@ -29,7 +29,6 @@ fn main() -> Result<()> {
     // If the user asked for completions, generate and exit immediately.
     if let Commands::Completions { shell } = &args.command {
         let mut cmd = Cli::command();
-        // Shell is Copy so we can deref it safely
         generate(*shell, &mut cmd, "marlin", &mut io::stdout());
         return Ok(());
     }
@@ -50,9 +49,7 @@ fn main() -> Result<()> {
 
     // Dispatch all commands
     match args.command {
-        Commands::Completions { .. } => {
-            // no-op, already handled above
-        }
+        Commands::Completions { .. } => {}
         Commands::Init => {
             info!("Database initialised at {}", cfg.db_path.display());
         }
@@ -93,7 +90,6 @@ fn main() -> Result<()> {
                 .with_context(|| format!("Could not open restored DB at {}", cfg.db_path.display()))?;
             info!("Successfully opened restored database.");
         }
-        // new domains delegate to their run() functions
         Commands::Link(link_cmd)   => cli::link::run(&link_cmd, &mut conn, args.format)?,
         Commands::Coll(coll_cmd)   => cli::coll::run(&coll_cmd, &mut conn, args.format)?,
         Commands::View(view_cmd)   => cli::view::run(&view_cmd, &mut conn, args.format)?,
@@ -221,6 +217,8 @@ fn attr_ls(conn: &rusqlite::Connection, path: &std::path::Path) -> Result<()> {
 }
 
 /// Build and run an FTS5 search query, with optional exec.
+/// Now splits “tag:foo/bar” into `tags_text:foo AND tags_text:bar`
+/// and “attr:key=value” into `attrs_text:key AND attrs_text:value`.
 fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>) -> Result<()> {
     let mut fts_query_parts = Vec::new();
     let parts = shlex::split(raw_query).unwrap_or_else(|| vec![raw_query.to_string()]);
@@ -228,9 +226,21 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
         if ["AND", "OR", "NOT"].contains(&part.as_str()) {
             fts_query_parts.push(part);
         } else if let Some(tag) = part.strip_prefix("tag:") {
-            fts_query_parts.push(format!("tags_text:{}", escape_fts_query_term(tag)));
+            let segments: Vec<&str> = tag.split('/').filter(|s| !s.is_empty()).collect();
+            for (i, seg) in segments.iter().enumerate() {
+                if i > 0 {
+                    fts_query_parts.push("AND".into());
+                }
+                fts_query_parts.push(format!("tags_text:{}", escape_fts_query_term(seg)));
+            }
         } else if let Some(attr) = part.strip_prefix("attr:") {
-            fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(attr)));
+            if let Some((k, v)) = attr.split_once('=') {
+                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(k)));
+                fts_query_parts.push("AND".into());
+                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(v)));
+            } else {
+                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(attr)));
+            }
         } else {
             fts_query_parts.push(escape_fts_query_term(&part));
         }
@@ -302,7 +312,7 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
 /// Quote terms for FTS when needed.
 fn escape_fts_query_term(term: &str) -> String {
     if term.contains(|c: char| c.is_whitespace() || "-:()\"".contains(c))
-        || ["AND","OR","NOT","NEAR"].contains(&term.to_uppercase().as_str())
+        || ["AND", "OR", "NOT", "NEAR"].contains(&term.to_uppercase().as_str())
     {
         format!("\"{}\"", term.replace('"', "\"\""))
     } else {
@@ -315,7 +325,7 @@ fn determine_scan_root(pattern: &str) -> PathBuf {
     let wildcard_pos = pattern.find(|c| c == '*' || c == '?' || c == '[').unwrap_or(pattern.len());
     let prefix = &pattern[..wildcard_pos];
     let mut root = PathBuf::from(prefix);
-    while root.as_os_str().to_string_lossy().contains(|c| ['*','?','['].contains(&c)) {
+    while root.as_os_str().to_string_lossy().contains(|c| ['*', '?', '['].contains(&c)) {
         if let Some(parent) = root.parent() {
             root = parent.to_path_buf();
         } else {

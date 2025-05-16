@@ -30,7 +30,7 @@ _No cloud, no telemetry – your data never leaves the machine._
         ▲  search / exec              └──────┬──────┘
         └────────── backup / restore          ▼
                                      timestamped snapshots
-````
+```
 
 ---
 
@@ -56,34 +56,10 @@ cargo build --release
 sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
 ```
 
----
-
 ## Quick start
 
-```bash
-marlin init                                        # create DB (idempotent)
-marlin scan ~/Pictures ~/Documents                 # index files
-marlin tag  ~/Pictures/**/*.jpg photos/trip-2024   # add hierarchical tag
-marlin attr set ~/Documents/**/*.pdf reviewed yes  # set custom attribute
-marlin search reviewed --exec "xdg-open {}"        # open matches
-marlin backup                                      # snapshot DB
-```
+For a concise walkthrough, see [Quick start & Demo](marlin_demo.md).
 
----
-
-### Enable shell completions (optional but handy)
-
-```bash
-# create the directory if needed
-mkdir -p ~/.config/bash_completion.d
-
-# dump Bash completion
-marlin completions bash > ~/.config/bash_completion.d/marlin
-```
-
-For Zsh, Fish, etc., redirect into your shell’s completions folder.
-
----
 
 ### Database location
 

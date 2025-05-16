@@ -1,4 +1,3 @@
-// src/db/mod.rs
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -19,6 +18,7 @@ use tracing::{debug, info};
 const MIGRATIONS: &[(&str, &str)] = &[
     ("0001_initial_schema.sql", include_str!("migrations/0001_initial_schema.sql")),
     ("0002_update_fts_and_triggers.sql", include_str!("migrations/0002_update_fts_and_triggers.sql")),
+    ("0003_create_links_collections_views.sql", include_str!("migrations/0003_create_links_collections_views.sql")),
 ];
 
 /* ─── connection bootstrap ──────────────────────────────────────────── */
@@ -128,6 +128,99 @@ pub fn upsert_attr(conn: &Connection, file_id: i64, key: &str, value: &str) -> R
     Ok(())
 }
 
+/// Add a typed link from one file to another.
+pub fn add_link(conn: &Connection, src_file_id: i64, dst_file_id: i64, link_type: Option<&str>) -> Result<()> {
+    conn.execute(
+        "INSERT INTO links(src_file_id, dst_file_id, type)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(src_file_id, dst_file_id, type) DO NOTHING",
+        params![src_file_id, dst_file_id, link_type],
+    )?;
+    Ok(())
+}
+
+/// Remove a typed link between two files.
+pub fn remove_link(conn: &Connection, src_file_id: i64, dst_file_id: i64, link_type: Option<&str>) -> Result<()> {
+    conn.execute(
+        "DELETE FROM links
+         WHERE src_file_id = ?1
+           AND dst_file_id = ?2
+           AND (type IS ?3 OR type = ?3)",
+        params![src_file_id, dst_file_id, link_type],
+    )?;
+    Ok(())
+}
+
+/// List all links for files matching a glob-style pattern.
+/// `direction` may be `"in"` (incoming), `"out"` (outgoing), or `None` (outgoing).
+pub fn list_links(
+    conn: &Connection,
+    pattern: &str,
+    direction: Option<&str>,
+    link_type: Option<&str>,
+) -> Result<Vec<(String, String, Option<String>)>> {
+    // Convert glob '*' → SQL LIKE '%'
+    let like_pattern = pattern.replace('*', "%");
+
+    // Find matching files
+    let mut stmt = conn.prepare("SELECT id, path FROM files WHERE path LIKE ?1")?;
+    let mut rows = stmt.query(params![like_pattern])?;
+    let mut files = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: i64 = row.get(0)?;
+        let path: String = row.get(1)?;
+        files.push((id, path));
+    }
+
+    let mut results = Vec::new();
+    for (file_id, file_path) in files {
+        let (src_col, dst_col) = match direction {
+            Some("in")  => ("dst_file_id", "src_file_id"),
+            _           => ("src_file_id", "dst_file_id"),
+        };
+
+        let sql = format!(
+            "SELECT f2.path, l.type
+             FROM links l
+             JOIN files f2 ON f2.id = l.{dst}
+             WHERE l.{src} = ?1
+               AND (?2 IS NULL OR l.type = ?2)",
+            src = src_col,
+            dst = dst_col,
+        );
+
+        let mut stmt2 = conn.prepare(&sql)?;
+        let mut rows2 = stmt2.query(params![file_id, link_type])?;
+        while let Some(r2) = rows2.next()? {
+            let other: String = r2.get(0)?;
+            let typ: Option<String> = r2.get(1)?;
+            results.push((file_path.clone(), other, typ));
+        }
+    }
+
+    Ok(results)
+}
+
+/// Find all incoming links (backlinks) to files matching a pattern.
+pub fn find_backlinks(conn: &Connection, pattern: &str) -> Result<Vec<(String, Option<String>)>> {
+    let like_pattern = pattern.replace('*', "%");
+    let mut stmt = conn.prepare(
+        "SELECT f1.path, l.type
+         FROM links l
+         JOIN files f1 ON f1.id = l.src_file_id
+         JOIN files f2 ON f2.id = l.dst_file_id
+         WHERE f2.path LIKE ?1",
+    )?;
+    let mut rows = stmt.query(params![like_pattern])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let src_path: String = row.get(0)?;
+        let typ: Option<String> = row.get(1)?;
+        result.push((src_path, typ));
+    }
+    Ok(result)
+}
+
 /* ─── backup / restore ──────────────────────────────────────────────── */
 
 pub fn backup<P: AsRef<Path>>(db_path: P) -> Result<PathBuf> {
@@ -152,4 +245,15 @@ pub fn backup<P: AsRef<Path>>(db_path: P) -> Result<PathBuf> {
 pub fn restore<P: AsRef<Path>>(backup_path: P, live_db_path: P) -> Result<()> {
     fs::copy(&backup_path, &live_db_path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrations_apply_in_memory() {
+        // Opening an in-memory database should apply every migration without error.
+        let _conn = open(":memory:").expect("in-memory migrations should run cleanly");
+    }
 }
