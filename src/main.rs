@@ -217,8 +217,8 @@ fn attr_ls(conn: &rusqlite::Connection, path: &std::path::Path) -> Result<()> {
 }
 
 /// Build and run an FTS5 search query, with optional exec.
-/// Now splits “tag:foo/bar” into `tags_text:foo AND tags_text:bar`
-/// and “attr:key=value” into `attrs_text:key AND attrs_text:value`.
+/// “tag:foo/bar” → tags_text:foo AND tags_text:bar
+/// “attr:key=value” → attrs_text:"key=value"
 fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>) -> Result<()> {
     let mut fts_query_parts = Vec::new();
     let parts = shlex::split(raw_query).unwrap_or_else(|| vec![raw_query.to_string()]);
@@ -234,13 +234,11 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
                 fts_query_parts.push(format!("tags_text:{}", escape_fts_query_term(seg)));
             }
         } else if let Some(attr) = part.strip_prefix("attr:") {
-            if let Some((k, v)) = attr.split_once('=') {
-                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(k)));
-                fts_query_parts.push("AND".into());
-                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(v)));
-            } else {
-                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(attr)));
-            }
+            // treat the entire key=value as one term
+            fts_query_parts.push(format!(
+                "attrs_text:{}",
+                escape_fts_query_term(attr)
+            ));
         } else {
             fts_query_parts.push(escape_fts_query_term(&part));
         }

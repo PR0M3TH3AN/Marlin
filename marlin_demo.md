@@ -1,99 +1,75 @@
-# Quick start & Demo
-
-## Quick start
-
-```bash
-# initialize the demo database
-marlin init
-
-# index only your demo folder
-marlin scan ~/marlin_demo_complex
-
-# tag all markdown in your demo Projects as “project/md”
-marlin tag "~/marlin_demo_complex/Projects/**/*.md" project/md
-
-# mark your demo reports as reviewed
-marlin attr set "~/marlin_demo_complex/Reports/*.pdf" reviewed yes
-
-# search for any reviewed files
-marlin search "attr:reviewed=yes"
-
-# snapshot the demo database
-marlin backup
-
-# test linking within your demo
-touch ~/marlin_demo_complex/foo.txt ~/marlin_demo_complex/bar.txt
-marlin scan ~/marlin_demo_complex
-foo=~/marlin_demo_complex/foo.txt
-bar=~/marlin_demo_complex/bar.txt
-marlin link add "$foo" "$bar"
-marlin link list "$foo"
-marlin link backlinks "$bar"
-````
-
----
-
 # Marlin Demo
 
-Here’s a little “complex‐demo” you can spin up to exercise tags, attributes, FTS queries, `--exec` hooks, backups & restores. Just copy–paste each block into your terminal:
+Here’s a little demo you can spin up to exercise tags, attributes, FTS queries, `--exec` hooks, backups & restores, and linking. Just copy–paste each block into your terminal:
+
+---
 
 ### 0 Create the demo folder and some files
 
 ```bash
-rm -rf ~/marlin_demo_complex
-mkdir -p ~/marlin_demo_complex/{Projects/{Alpha,Beta,Gamma},Logs,Reports,Scripts,Media/Photos}
+cargo build --release
+```
+
+```bash
+sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
+```
+
+```bash
+rm -rf ~/marlin_demo
+mkdir -p ~/marlin_demo/{Projects/{Alpha,Beta,Gamma},Logs,Reports,Scripts,Media/Photos}
 
 # Projects
-cat <<EOF > ~/marlin_demo_complex/Projects/Alpha/draft1.md
+cat <<EOF > ~/marlin_demo/Projects/Alpha/draft1.md
 # Alpha draft 1
 
 - [ ] TODO: outline architecture
 - [ ] TODO: write tests
 EOF
 
-cat <<EOF > ~/marlin_demo_complex/Projects/Alpha/draft2.md
+cat <<EOF > ~/marlin_demo/Projects/Alpha/draft2.md
 # Alpha draft 2
 
 - [x] TODO: outline architecture
 - [ ] TODO: implement feature X
 EOF
 
-cat <<EOF > ~/marlin_demo_complex/Projects/Beta/notes.md
+cat <<EOF > ~/marlin_demo/Projects/Beta/notes.md
 Beta meeting notes:
 
 - decided on roadmap
 - ACTION: follow up with design team
 EOF
 
-cat <<EOF > ~/marlin_demo_complex/Projects/Beta/final.md
+cat <<EOF > ~/marlin_demo/Projects/Beta/final.md
 # Beta Final
 
 All tasks complete. Ready to ship!
 EOF
 
-cat <<EOF > ~/marlin_demo_complex/Projects/Gamma/TODO.txt
+cat <<EOF > ~/marlin_demo/Projects/Gamma/TODO.txt
 Gamma tasks:
 
 TODO: refactor module Y
 EOF
 
 # Logs
-echo "2025-05-15 12:00:00 INFO Starting app"   > ~/marlin_demo_complex/Logs/app.log
-echo "2025-05-15 12:01:00 ERROR Oops, crash"     >> ~/marlin_demo_complex/Logs/app.log
-echo "2025-05-15 00:00:00 INFO System check OK" > ~/marlin_demo_complex/Logs/system.log
+echo "2025-05-15 12:00:00 INFO Starting app"   > ~/marlin_demo/Logs/app.log
+echo "2025-05-15 12:01:00 ERROR Oops, crash"     >> ~/marlin_demo/Logs/app.log
+echo "2025-05-15 00:00:00 INFO System check OK" > ~/marlin_demo/Logs/system.log
 
 # Reports
-printf "Q1 financials\n" > ~/marlin_demo_complex/Reports/Q1_report.pdf
+printf "Q1 financials
+" > ~/marlin_demo/Reports/Q1_report.pdf
 
 # Scripts
-cat <<'EOF' > ~/marlin_demo_complex/Scripts/deploy.sh
+cat <<'EOF' > ~/marlin_demo/Scripts/deploy.sh
 #!/usr/bin/env bash
 echo "Deploying version $1..."
 EOF
-chmod +x ~/marlin_demo_complex/Scripts/deploy.sh
+chmod +x ~/marlin_demo/Scripts/deploy.sh
 
 # Media
-echo "JPEGDATA" > ~/marlin_demo_complex/Media/Photos/event.jpg
+echo "JPEGDATA" > ~/marlin_demo/Media/Photos/event.jpg
 ```
 
 ---
@@ -102,7 +78,7 @@ echo "JPEGDATA" > ~/marlin_demo_complex/Media/Photos/event.jpg
 
 ```bash
 marlin init
-marlin scan ~/marlin_demo_complex
+marlin scan ~/marlin_demo
 ```
 
 ---
@@ -111,13 +87,13 @@ marlin scan ~/marlin_demo_complex
 
 ```bash
 # Tag all project markdown as “project/md”
-marlin tag "~/marlin_demo_complex/Projects/**/*.md" project/md
+marlin tag "~/marlin_demo/Projects/**/*.md" project/md
 
 # Tag your logs
-marlin tag "~/marlin_demo_complex/Logs/**/*.log" logs/app
+marlin tag "~/marlin_demo/Logs/**/*.log" logs/app
 
 # Tag everything under Projects/Beta as “project/beta”
-marlin tag "~/marlin_demo_complex/Projects/Beta/**/*" project/beta
+marlin tag "~/marlin_demo/Projects/Beta/**/*" project/beta
 ```
 
 ---
@@ -126,10 +102,10 @@ marlin tag "~/marlin_demo_complex/Projects/Beta/**/*" project/beta
 
 ```bash
 # Mark only the “final.md” as complete
-marlin attr set "~/marlin_demo_complex/Projects/Beta/final.md" status complete
+marlin attr set "~/marlin_demo/Projects/Beta/final.md" status complete
 
 # Mark PDF as reviewed
-marlin attr set "~/marlin_demo_complex/Reports/*.pdf" reviewed yes
+marlin attr set "~/marlin_demo/Reports/*.pdf" reviewed yes
 ```
 
 ---
@@ -161,8 +137,8 @@ marlin search "attr:reviewed=yes" --exec 'xdg-open {}'
 ### 5 Try JSON output & verbose mode
 
 ```bash
-marlin --format=json attr ls ~/marlin_demo_complex/Projects/Beta/final.md
-marlin --verbose scan ~/marlin_demo_complex
+marlin --format=json attr ls ~/marlin_demo/Projects/Beta/final.md
+marlin --verbose scan ~/marlin_demo
 ```
 
 ---
@@ -182,3 +158,41 @@ marlin restore "$snap"
 # Confirm you still see “TODO”
 marlin search TODO
 ```
+
+---
+
+### 7 Test linking functionality
+
+```bash
+# Create two demo files
+touch ~/marlin_demo/foo.txt ~/marlin_demo/bar.txt
+
+# Re-scan to index new files
+marlin scan ~/marlin_demo
+
+# Link foo.txt → bar.txt
+foo=~/marlin_demo/foo.txt
+bar=~/marlin_demo/bar.txt
+marlin link add "$foo" "$bar"
+
+# List outgoing links for foo.txt
+marlin link list "$foo"
+
+# List incoming links (backlinks) to bar.txt
+marlin link backlinks "$bar"
+```
+
+---
+
+That gives you:
+
+* **wide folder structures** (Projects, Logs, Reports, Scripts, Media)
+* **hierarchical tags** you can mix and match
+* **key-value attributes** to flag state & review
+* **FTS5 queries** with AND/OR/NOT
+* **`--exec` hooks** to trigger external commands
+* **JSON output** for programmatic gluing
+* **backups & restores** to guard your data
+* **file-to-file links** for graph relationships
+
+Have fun playing around!
