@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, CommandFactory};
 use clap_complete::{generate, Shell};
 use glob::Pattern;
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use shellexpand;
 use shlex;
 use std::{env, io, path::PathBuf, process::Command};
@@ -106,7 +106,23 @@ fn main() -> Result<()> {
 
 /// Apply a hierarchical tag to all files matching the glob pattern.
 fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Result<()> {
-    let tag_id = db::ensure_tag_path(conn, tag_path)?;
+    // ensure_tag_path returns the deepest-node ID
+    let leaf_tag_id = db::ensure_tag_path(conn, tag_path)?;
+
+    // collect that tag and all its ancestors
+    let mut tag_ids = Vec::new();
+    let mut current = Some(leaf_tag_id);
+    while let Some(id) = current {
+        tag_ids.push(id);
+        current = conn
+            .query_row(
+                "SELECT parent_id FROM tags WHERE id = ?1",
+                params![id],
+                |r| r.get::<_, Option<i64>>(0),
+            )
+            .optional()?;
+    }
+
     let expanded = shellexpand::tilde(pattern).into_owned();
     let pat = Pattern::new(&expanded)
         .with_context(|| format!("Invalid glob pattern `{}`", expanded))?;
@@ -132,7 +148,14 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
 
         match stmt_file.query_row(params![path_str.as_ref()], |r| r.get::<_, i64>(0)) {
             Ok(file_id) => {
-                if stmt_insert.execute(params![file_id, tag_id])? > 0 {
+                // insert every segment tag
+                let mut newly = false;
+                for &tid in &tag_ids {
+                    if stmt_insert.execute(params![file_id, tid])? > 0 {
+                        newly = true;
+                    }
+                }
+                if newly {
                     info!(file = %path_str, tag = tag_path, "tagged");
                     count += 1;
                 } else {
@@ -171,7 +194,11 @@ fn attr_set(
     let mut stmt_file = conn.prepare("SELECT id FROM files WHERE path = ?1")?;
     let mut count = 0;
 
-    for entry in WalkDir::new(&root).into_iter().filter_map(Result::ok).filter(|e| e.file_type().is_file()) {
+    for entry in WalkDir::new(&root)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+    {
         let path_str = entry.path().to_string_lossy();
         debug!("testing attr path: {}", path_str);
         if !pat.matches(&path_str) {
@@ -218,7 +245,7 @@ fn attr_ls(conn: &rusqlite::Connection, path: &std::path::Path) -> Result<()> {
 
 /// Build and run an FTS5 search query, with optional exec.
 /// “tag:foo/bar” → tags_text:foo AND tags_text:bar
-/// “attr:key=value” → attrs_text:"key=value"
+/// “attr:key=value” → attrs_text:key=value
 fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>) -> Result<()> {
     let mut fts_query_parts = Vec::new();
     let parts = shlex::split(raw_query).unwrap_or_else(|| vec![raw_query.to_string()]);
@@ -234,11 +261,8 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
                 fts_query_parts.push(format!("tags_text:{}", escape_fts_query_term(seg)));
             }
         } else if let Some(attr) = part.strip_prefix("attr:") {
-            // treat the entire key=value as one term
-            fts_query_parts.push(format!(
-                "attrs_text:{}",
-                escape_fts_query_term(attr)
-            ));
+            // keep whole key=value together
+            fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(attr)));
         } else {
             fts_query_parts.push(escape_fts_query_term(&part));
         }
