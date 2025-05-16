@@ -1,4 +1,6 @@
 // src/main.rs
+#![deny(warnings)]
+
 mod cli;
 mod config;
 mod db;

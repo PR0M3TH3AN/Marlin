@@ -15,7 +15,7 @@ pub struct ArgsSave  { pub view_name: String, pub query: String }
 #[derive(Args, Debug)]
 pub struct ArgsExec  { pub view_name: String }
 
-pub fn run(cmd: &ViewCmd, conn: &mut Connection, format: Format) -> anyhow::Result<()> {
+pub fn run(cmd: &ViewCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {
         ViewCmd::Save(a) => todo!("view save {:?}", a),
         ViewCmd::List   => todo!("view list"),

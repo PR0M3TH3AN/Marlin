@@ -11,7 +11,7 @@ pub enum VersionCmd {
 #[derive(Args, Debug)]
 pub struct ArgsDiff { pub file: String }
 
-pub fn run(cmd: &VersionCmd, conn: &mut Connection, format: Format) -> anyhow::Result<()> {
+pub fn run(cmd: &VersionCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {
         VersionCmd::Diff(a) => todo!("version diff {:?}", a),
     }

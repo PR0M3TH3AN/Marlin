@@ -17,7 +17,7 @@ pub struct ArgsTrans { pub from_state: String,   pub to_state: String }
 #[derive(Args, Debug)]
 pub struct ArgsLog   { pub file_pattern: String }
 
-pub fn run(cmd: &StateCmd, conn: &mut Connection, format: Format) -> anyhow::Result<()> {
+pub fn run(cmd: &StateCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {
         StateCmd::Set(a)           => todo!("state set {:?}", a),
         StateCmd::TransitionsAdd(a)=> todo!("state transitions-add {:?}", a),

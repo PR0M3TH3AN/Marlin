@@ -15,7 +15,7 @@ pub struct ArgsSet {
     pub message:      String,
 }
 
-pub fn run(cmd: &RemindCmd, conn: &mut Connection, format: Format) -> anyhow::Result<()> {
+pub fn run(cmd: &RemindCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {
         RemindCmd::Set(a) => todo!("remind set {:?}", a),
     }

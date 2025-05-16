@@ -9,7 +9,7 @@ pub mod annotate;
 pub mod version;
 pub mod event;
 
-use clap::{Parser, Subcommand, CommandFactory, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 
 /// Output format for commands.

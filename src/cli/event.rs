@@ -16,7 +16,7 @@ pub struct ArgsAdd {
     pub description: String,
 }
 
-pub fn run(cmd: &EventCmd, conn: &mut Connection, format: Format) -> anyhow::Result<()> {
+pub fn run(cmd: &EventCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {
         EventCmd::Add(a)      => todo!("event add {:?}", a),
         EventCmd::Timeline    => todo!("event timeline"),

@@ -20,7 +20,7 @@ pub struct ArgsAdd {
 #[derive(Args, Debug)]
 pub struct ArgsList { pub file_pattern: String }
 
-pub fn run(cmd: &AnnotateCmd, conn: &mut Connection, format: Format) -> anyhow::Result<()> {
+pub fn run(cmd: &AnnotateCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {
         AnnotateCmd::Add(a)  => todo!("annotate add {:?}", a),
         AnnotateCmd::List(a) => todo!("annotate list {:?}", a),

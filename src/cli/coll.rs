@@ -17,7 +17,7 @@ pub struct AddArgs    { pub name: String, pub file_pattern: String }
 #[derive(Args, Debug)]
 pub struct ListArgs   { pub name: String }
 
-pub fn run(cmd: &CollCmd, conn: &mut Connection, format: Format) -> anyhow::Result<()> {
+pub fn run(cmd: &CollCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {
         CollCmd::Create(a) => todo!("coll create {:?}", a),
         CollCmd::Add(a)    => todo!("coll add {:?}", a),
