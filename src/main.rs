@@ -6,36 +6,39 @@ mod logging;
 mod scan;
 
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand, CommandFactory};
-use clap_complete::{generate, Shell};
+use clap::{Parser, CommandFactory};
+use clap_complete::generate;
 use glob::Pattern;
-use rusqlite::{params, OptionalExtension};
+use rusqlite::params;
 use shellexpand;
 use shlex;
 use std::{env, io, path::PathBuf, process::Command};
 use tracing::{debug, error, info};
 use walkdir::WalkDir;
 
-use cli::{Cli, Commands, Format};
+use cli::{Cli, Commands};
 
 fn main() -> Result<()> {
-    // Parse CLI and bootstrap logging
-    let mut args = Cli::parse();
+    /* ── CLI parsing & logging ────────────────────────────────────── */
+
+    let args = Cli::parse();
     if args.verbose {
         env::set_var("RUST_LOG", "debug");
     }
     logging::init();
 
-    // If the user asked for completions, generate and exit immediately.
+    /* ── shell-completion shortcut ───────────────────────────────── */
+
     if let Commands::Completions { shell } = &args.command {
         let mut cmd = Cli::command();
         generate(*shell, &mut cmd, "marlin", &mut io::stdout());
         return Ok(());
     }
 
-    let cfg = config::Config::load()?;
+    /* ── config & automatic backup ───────────────────────────────── */
 
-    // Backup before any non-init, non-backup/restore command
+    let cfg = config::Config::load()?; // DB path etc.
+
     match &args.command {
         Commands::Init | Commands::Backup | Commands::Restore { .. } => {}
         _ => match db::backup(&cfg.db_path) {
@@ -44,18 +47,29 @@ fn main() -> Result<()> {
         },
     }
 
-    // Open (and migrate) the DB
+    /* ── open DB (runs migrations if needed) ─────────────────────── */
+
     let mut conn = db::open(&cfg.db_path)?;
 
-    // Dispatch all commands
+    /* ── command dispatch ────────────────────────────────────────── */
+
     match args.command {
-        Commands::Completions { .. } => {}
+        Commands::Completions { .. } => {} // already handled
+
         Commands::Init => {
             info!("Database initialised at {}", cfg.db_path.display());
+
+            // Always (re-)scan the current directory so even an existing DB
+            // picks up newly created files in the working tree.
+            let cwd   = env::current_dir().context("getting current directory")?;
+            let count = scan::scan_directory(&mut conn, &cwd)
+                .context("initial scan failed")?;
+            info!("Initial scan complete – indexed/updated {} files", count);
         }
+
         Commands::Scan { paths } => {
             let scan_paths = if paths.is_empty() {
-                vec![std::env::current_dir()?]
+                vec![env::current_dir()?]
             } else {
                 paths
             };
@@ -63,26 +77,21 @@ fn main() -> Result<()> {
                 scan::scan_directory(&mut conn, &p)?;
             }
         }
-        Commands::Tag { pattern, tag_path } => {
-            apply_tag(&conn, &pattern, &tag_path)?;
-        }
-        Commands::Attr { action } => match action {
+
+        Commands::Tag   { pattern, tag_path } => apply_tag(&conn, &pattern, &tag_path)?,
+        Commands::Attr  { action }            => match action {
             cli::AttrCmd::Set { pattern, key, value } => {
-                attr_set(&conn, &pattern, &key, &value)?;
+                attr_set(&conn, &pattern, &key, &value)?
             }
-            cli::AttrCmd::Ls { path } => {
-                attr_ls(&conn, &path)?;
-            }
+            cli::AttrCmd::Ls { path } => attr_ls(&conn, &path)?,
         },
-        Commands::Search { query, exec } => {
-            run_search(&conn, &query, exec)?;
-        }
-        Commands::Backup => {
+        Commands::Search { query, exec }      => run_search(&conn, &query, exec)?,
+        Commands::Backup                      => {
             let path = db::backup(&cfg.db_path)?;
             println!("Backup created: {}", path.display());
         }
-        Commands::Restore { backup_path } => {
-            drop(conn);
+        Commands::Restore { backup_path }     => {
+            drop(conn); // close handle before overwrite
             db::restore(&backup_path, &cfg.db_path)
                 .with_context(|| format!("Failed to restore DB from {}", backup_path.display()))?;
             println!("Restored DB from {}", backup_path.display());
@@ -90,19 +99,23 @@ fn main() -> Result<()> {
                 .with_context(|| format!("Could not open restored DB at {}", cfg.db_path.display()))?;
             info!("Successfully opened restored database.");
         }
-        Commands::Link(link_cmd)   => cli::link::run(&link_cmd, &mut conn, args.format)?,
-        Commands::Coll(coll_cmd)   => cli::coll::run(&coll_cmd, &mut conn, args.format)?,
-        Commands::View(view_cmd)   => cli::view::run(&view_cmd, &mut conn, args.format)?,
+
+        /* passthrough sub-modules that still stub out their logic */
+        Commands::Link(link_cmd)   => cli::link::run(&link_cmd,   &mut conn, args.format)?,
+        Commands::Coll(coll_cmd)   => cli::coll::run(&coll_cmd,   &mut conn, args.format)?,
+        Commands::View(view_cmd)   => cli::view::run(&view_cmd,   &mut conn, args.format)?,
         Commands::State(state_cmd) => cli::state::run(&state_cmd, &mut conn, args.format)?,
-        Commands::Task(task_cmd)   => cli::task::run(&task_cmd, &mut conn, args.format)?,
-        Commands::Remind(rm_cmd)   => cli::remind::run(&rm_cmd, &mut conn, args.format)?,
+        Commands::Task(task_cmd)   => cli::task::run(&task_cmd,   &mut conn, args.format)?,
+        Commands::Remind(rm_cmd)   => cli::remind::run(&rm_cmd,   &mut conn, args.format)?,
         Commands::Annotate(an_cmd) => cli::annotate::run(&an_cmd, &mut conn, args.format)?,
-        Commands::Version(v_cmd)   => cli::version::run(&v_cmd, &mut conn, args.format)?,
-        Commands::Event(e_cmd)     => cli::event::run(&e_cmd, &mut conn, args.format)?,
+        Commands::Version(v_cmd)   => cli::version::run(&v_cmd,   &mut conn, args.format)?,
+        Commands::Event(e_cmd)     => cli::event::run(&e_cmd,     &mut conn, args.format)?,
     }
 
     Ok(())
 }
+
+/* ───────────────────────── helpers & sub-routines ────────────────── */
 
 /// Apply a hierarchical tag to all files matching the glob pattern.
 fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Result<()> {
@@ -114,13 +127,15 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
     let mut current = Some(leaf_tag_id);
     while let Some(id) = current {
         tag_ids.push(id);
-        current = conn
-            .query_row(
-                "SELECT parent_id FROM tags WHERE id = ?1",
-                params![id],
-                |r| r.get::<_, Option<i64>>(0),
-            )
-            .optional()?;
+        current = match conn.query_row(
+            "SELECT parent_id FROM tags WHERE id = ?1",
+            params![id],
+            |r| r.get::<_, Option<i64>>(0),
+        ) {
+            Ok(parent_id) => parent_id,
+            Err(rusqlite::Error::QueryReturnedNoRows) => None,
+            Err(e) => return Err(e.into()),
+        };
     }
 
     let expanded = shellexpand::tilde(pattern).into_owned();
@@ -128,9 +143,10 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
         .with_context(|| format!("Invalid glob pattern `{}`", expanded))?;
     let root = determine_scan_root(&expanded);
 
-    let mut stmt_file = conn.prepare("SELECT id FROM files WHERE path = ?1")?;
-    let mut stmt_insert =
-        conn.prepare("INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)")?;
+    let mut stmt_file   = conn.prepare("SELECT id FROM files WHERE path = ?1")?;
+    let mut stmt_insert = conn.prepare(
+        "INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)",
+    )?;
 
     let mut count = 0;
     for entry in WalkDir::new(&root)
@@ -148,7 +164,6 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
 
         match stmt_file.query_row(params![path_str.as_ref()], |r| r.get::<_, i64>(0)) {
             Ok(file_id) => {
-                // insert every segment tag
                 let mut newly = false;
                 for &tid in &tag_ids {
                     if stmt_insert.execute(params![file_id, tid])? > 0 {
@@ -236,7 +251,8 @@ fn attr_ls(conn: &rusqlite::Connection, path: &std::path::Path) -> Result<()> {
     let mut stmt = conn.prepare(
         "SELECT key, value FROM attributes WHERE file_id = ?1 ORDER BY key",
     )?;
-    for row in stmt.query_map([file_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))? {
+    for row in stmt.query_map([file_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+    {
         let (k, v) = row?;
         println!("{k} = {v}");
     }
@@ -244,8 +260,8 @@ fn attr_ls(conn: &rusqlite::Connection, path: &std::path::Path) -> Result<()> {
 }
 
 /// Build and run an FTS5 search query, with optional exec.
-/// “tag:foo/bar” → tags_text:foo AND tags_text:bar
-/// “attr:key=value” → attrs_text:key=value
+/// “tag:foo/bar”   → tags_text:foo AND tags_text:bar
+/// “attr:k=v”      → attrs_text:k AND attrs_text:v
 fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>) -> Result<()> {
     let mut fts_query_parts = Vec::new();
     let parts = shlex::split(raw_query).unwrap_or_else(|| vec![raw_query.to_string()]);
@@ -261,8 +277,15 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
                 fts_query_parts.push(format!("tags_text:{}", escape_fts_query_term(seg)));
             }
         } else if let Some(attr) = part.strip_prefix("attr:") {
-            // keep whole key=value together
-            fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(attr)));
+            let mut kv = attr.splitn(2, '=');
+            let key = kv.next().unwrap();
+            if let Some(value) = kv.next() {
+                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(key)));
+                fts_query_parts.push("AND".into());
+                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(value)));
+            } else {
+                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(key)));
+            }
         } else {
             fts_query_parts.push(escape_fts_query_term(&part));
         }
@@ -347,7 +370,11 @@ fn determine_scan_root(pattern: &str) -> PathBuf {
     let wildcard_pos = pattern.find(|c| c == '*' || c == '?' || c == '[').unwrap_or(pattern.len());
     let prefix = &pattern[..wildcard_pos];
     let mut root = PathBuf::from(prefix);
-    while root.as_os_str().to_string_lossy().contains(|c| ['*', '?', '['].contains(&c)) {
+    while root
+        .as_os_str()
+        .to_string_lossy()
+        .contains(|c| ['*', '?', '['].contains(&c))
+    {
         if let Some(parent) = root.parent() {
             root = parent.to_path_buf();
         } else {

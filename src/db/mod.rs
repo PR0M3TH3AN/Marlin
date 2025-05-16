@@ -12,14 +12,19 @@ use rusqlite::{
     OpenFlags,
     OptionalExtension,
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// Embed every numbered migration file here.
 const MIGRATIONS: &[(&str, &str)] = &[
     ("0001_initial_schema.sql", include_str!("migrations/0001_initial_schema.sql")),
     ("0002_update_fts_and_triggers.sql", include_str!("migrations/0002_update_fts_and_triggers.sql")),
     ("0003_create_links_collections_views.sql", include_str!("migrations/0003_create_links_collections_views.sql")),
+    ("0004_fix_hierarchical_tags_fts.sql", include_str!("migrations/0004_fix_hierarchical_tags_fts.sql")),
 ];
+
+/// Migrations that should *always* be re-run.  
+/// We no longer need to force any, so leave it empty.
+const FORCE_APPLY_MIGRATIONS: &[i64] = &[];   // <- was &[4]
 
 /* ─── connection bootstrap ──────────────────────────────────────────── */
 
@@ -50,6 +55,14 @@ fn apply_migrations(conn: &mut Connection) -> Result<()> {
 
     // Legacy patch (ignore if exists)
     let _ = conn.execute("ALTER TABLE schema_version ADD COLUMN applied_on TEXT", []);
+
+    // Force-remove migrations that should always be applied
+    for &version in FORCE_APPLY_MIGRATIONS {
+        let rows_affected = conn.execute("DELETE FROM schema_version WHERE version = ?1", [version])?;
+        if rows_affected > 0 {
+            info!("Forcing reapplication of migration {}", version);
+        }
+    }
 
     let tx = conn.transaction()?;
 
@@ -89,6 +102,37 @@ fn apply_migrations(conn: &mut Connection) -> Result<()> {
     }
 
     tx.commit()?;
+
+    // Verify that all migrations have been applied
+    let mut missing_migrations = Vec::new();
+    for (fname, _) in MIGRATIONS {
+        let version: i64 = fname
+            .split('_')
+            .next()
+            .and_then(|s| s.parse().ok())
+            .expect("migration filenames start with number");
+
+        let exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM schema_version WHERE version = ?1",
+                [version],
+                |_| Ok(true),
+            )
+            .optional()?
+            .unwrap_or(false);
+
+        if !exists {
+            missing_migrations.push(version);
+        }
+    }
+
+    if !missing_migrations.is_empty() {
+        warn!(
+            "The following migrations were not applied: {:?}. This may indicate a problem with the migration system.",
+            missing_migrations
+        );
+    }
+
     Ok(())
 }
 

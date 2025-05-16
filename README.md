@@ -60,6 +60,74 @@ sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
 
 For a concise walkthrough, see [Quick start & Demo](marlin_demo.md).
 
+## Testing 
+
+Below is a **repeat-able 3-step flow** you can use **every time you pull fresh code**.
+
+---
+
+### 0  Prepare once
+
+```bash
+# Run once (or add to ~/.bashrc) so debug + release artefacts land
+# in the same predictable place.  Speeds-up future builds.
+export CARGO_TARGET_DIR=target
+```
+
+---
+
+### 1  Build the new binary
+
+```bash
+git pull             # grab the latest commit
+cargo build --release
+sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
+```
+
+* `cargo build --release` – builds the optimised binary.
+* `install …` – copies it into your `$PATH` so `marlin` on the CLI is the fresh one.
+
+---
+
+### 2  Run the smoke-test suite
+
+```bash
+# Runs the end-to-end test we added in tests/e2e.rs
+cargo test --test e2e -- --nocapture
+```
+
+* `--test e2e` – compiles and runs **only** `tests/e2e.rs`; other unit-tests are skipped (add them later if you like).
+* `--nocapture` – streams stdout/stderr so you can watch each CLI step in real time.
+* Exit-code **0** ➜ everything passed.
+  Any non-zero exit or a red ✗ line means a step failed; the assert’s diff will show the command and its output.
+
+---
+
+### 3  (Optionally) run all tests
+
+```bash
+cargo test --all -- --nocapture
+```
+
+This will execute:
+
+* unit tests in `src/**`
+* every file in `tests/`
+* doc-tests
+
+If you wire **“cargo test --all”** into CI (GitHub Actions, GitLab, etc.), pushes that break a workflow will be rejected automatically.
+
+---
+
+#### One-liner helper (copy/paste)
+
+```bash
+git pull && cargo build --release &&
+sudo install -Dm755 target/release/marlin /usr/local/bin/marlin &&
+cargo test --test e2e -- --nocapture
+```
+
+Stick that in a shell alias (`alias marlin-ci='…'`) and you’ve got a 5-second upgrade-and-verify loop.
 
 ### Database location
 
@@ -126,112 +194,6 @@ cargo install --path . --force    # rebuild & replace installed binary
 ```
 
 The versioned migration system preserves your data across upgrades.
-
----
-
-## Five-Minute Quickstart
-
-Just paste & run each block in your terminal.
-
-### 0 Prepare, build & install
-
-```bash
-cd ~/Documents/GitHub/Marlin
-cargo build --release
-sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
-```
-
-> Now `marlin` is available everywhere.
-
-### 1 Enable shell completion
-
-```bash
-mkdir -p ~/.config/bash_completion.d
-marlin completions bash > ~/.config/bash_completion.d/marlin
-```
-
-### 2 Prepare a clean demo directory
-
-```bash
-rm -rf ~/marlin_demo
-mkdir -p ~/marlin_demo/{Projects/{Alpha,Beta},Media/Photos,Docs}
-
-printf "Alpha draft\n"  > ~/marlin_demo/Projects/Alpha/draft.txt
-printf "Beta notes\n"   > ~/marlin_demo/Projects/Beta/notes.md
-printf "Receipt PDF\n"  > ~/marlin_demo/Docs/receipt.pdf
-printf "fake jpg\n"     > ~/marlin_demo/Media/Photos/vacation.jpg
-```
-
-### 3 Initialize & index files
-
-```bash
-marlin init
-marlin scan ~/marlin_demo
-
-# show every path tested:
-marlin --verbose scan ~/marlin_demo
-```
-
-> Only changed files get re-indexed on subsequent runs.
-
-### 4 Attach tags & attributes
-
-```bash
-# Tag everything under “Alpha”
-marlin tag ~/marlin_demo/Projects/Alpha/**/* project/alpha
-
-# Mark all PDFs as reviewed
-marlin attr set ~/marlin_demo/**/*.pdf reviewed yes
-
-# Output as JSON instead:
-marlin --format=json attr set ~/marlin_demo/**/*.pdf reviewed yes
-```
-
-### 5 Search your index
-
-```bash
-# By tag or filename
-marlin search alpha
-
-# Combined terms:
-marlin search "reviewed AND pdf"
-
-# Run a command on each hit:
-marlin search reviewed --exec 'echo HIT → {}'
-```
-
-### 6 Backup & restore
-
-```bash
-# Snapshot
-snap=$(marlin backup | awk '{print $NF}')
-
-# Simulate loss
-rm ~/.local/share/marlin/index.db
-
-# Restore
-marlin restore "$snap"
-
-# Verify
-marlin search reviewed
-```
-
----
-
-##### What you just exercised
-
-| Command           | Purpose                                   |
-| ----------------- | ----------------------------------------- |
-| `marlin init`     | Create / upgrade the SQLite database      |
-| `marlin scan`     | Walk directories and (re)index files      |
-| `marlin tag`      | Attach hierarchical tags                  |
-| `marlin attr set` | Add/overwrite custom key-value attributes |
-| `marlin search`   | FTS5 search across path / tags / attrs    |
-| `--exec`          | Pipe hits into any shell command          |
-| `marlin backup`   | Timestamped snapshot of the DB            |
-| `marlin restore`  | Replace live DB with a chosen snapshot    |
-
-That’s the complete surface area of Marlin today—feel free to play around or point the scanner at real folders.
 
 ---
 

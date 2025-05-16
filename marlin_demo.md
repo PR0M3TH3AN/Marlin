@@ -1,18 +1,22 @@
-# Marlin Demo
+# Marlin Demo 
 
-Here’s a little demo you can spin up to exercise tags, attributes, FTS queries, `--exec` hooks, backups & restores, and linking. Just copy–paste each block into your terminal:
+Below is the **“hello-world” demo** that matches the current master branch (auto-scan on `marlin init`, no more forced-migration noise, and cleaner build).
 
 ---
 
-### 0 Create the demo folder and some files
+## 0 Build & install Marlin
 
 ```bash
-cargo build --release
-```
-
-```bash
+# inside the repo
+cargo build --release            # build the new binary
 sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
 ```
+
+*(`cargo install --path . --locked --force` works too if you prefer.)*
+
+---
+
+## 1 Create the demo tree
 
 ```bash
 rm -rf ~/marlin_demo
@@ -72,18 +76,31 @@ chmod +x ~/marlin_demo/Scripts/deploy.sh
 echo "JPEGDATA" > ~/marlin_demo/Media/Photos/event.jpg
 ```
 
+*(copy the file-creation block from your original instructions — nothing about the files needs to change)*
+
 ---
 
-### 1 Initialize & index
+## 2 Initialise **and** index (one step)
+
+`marlin init` now performs a first-time scan of whatever directory you run it in.
+So just:
 
 ```bash
+cd ~/marlin_demo          # <-- important: run init from the folder you want indexed
 marlin init
-marlin scan ~/marlin_demo
 ```
+
+That will:
+
+1. create/upgrade the DB,
+2. run all migrations exactly once,
+3. walk the current directory and ingest every file it finds.
+
+Need to add more paths later? Use `marlin scan <dir>` exactly as before.
 
 ---
 
-### 2 Attach hierarchical tags
+## 3 Tagging examples
 
 ```bash
 # Tag all project markdown as “project/md”
@@ -98,101 +115,69 @@ marlin tag "~/marlin_demo/Projects/Beta/**/*" project/beta
 
 ---
 
-### 3 Set custom attributes
+## 4 Set custom attributes
 
 ```bash
-# Mark only the “final.md” as complete
-marlin attr set "~/marlin_demo/Projects/Beta/final.md" status complete
-
-# Mark PDF as reviewed
-marlin attr set "~/marlin_demo/Reports/*.pdf" reviewed yes
+marlin attr set "~/marlin_demo/Projects/Beta/final.md"   status  complete
+marlin attr set "~/marlin_demo/Reports/*.pdf"            reviewed yes
 ```
 
 ---
 
-### 4 Play with search
+## 5 Play with search / exec hooks
 
 ```bash
-# Find all TODOs (in any file)
 marlin search TODO
-
-# All markdown under your “project/md” tag
 marlin search tag:project/md
-
-# All files tagged “logs/app” containing ERROR
 marlin search "tag:logs/app AND ERROR"
-
-# Only your completed Beta deliverable
 marlin search "attr:status=complete"
-
-# Only reviewed PDFs
 marlin search "attr:reviewed=yes AND pdf"
-
-# Open every reviewed report
 marlin search "attr:reviewed=yes" --exec 'xdg-open {}'
 ```
 
 ---
 
-### 5 Try JSON output & verbose mode
+## 6 JSON output & verbose mode
 
 ```bash
 marlin --format=json attr ls ~/marlin_demo/Projects/Beta/final.md
-marlin --verbose scan ~/marlin_demo
+marlin --verbose      scan     ~/marlin_demo         # re-scan to see debug logs
 ```
 
 ---
 
-### 6 Snapshot & restore
+## 7 Snapshot & restore
 
 ```bash
-# Snapshot
 snap=$(marlin backup | awk '{print $NF}')
-
-# Delete your DB to simulate data loss
-rm ~/.local/share/marlin/index.db
-
-# Bring it back
+rm ~/.local/share/marlin/index.db           # simulate disaster
 marlin restore "$snap"
-
-# Confirm you still see “TODO”
-marlin search TODO
+marlin search TODO                          # should still work
 ```
 
 ---
 
-### 7 Test linking functionality
+## 8 Linking demo
 
 ```bash
-# Create two demo files
 touch ~/marlin_demo/foo.txt ~/marlin_demo/bar.txt
+marlin scan ~/marlin_demo                   # index the new files
 
-# Re-scan to index new files
-marlin scan ~/marlin_demo
-
-# Link foo.txt → bar.txt
 foo=~/marlin_demo/foo.txt
 bar=~/marlin_demo/bar.txt
-marlin link add "$foo" "$bar"
 
-# List outgoing links for foo.txt
-marlin link list "$foo"
-
-# List incoming links (backlinks) to bar.txt
-marlin link backlinks "$bar"
+marlin link add        "$foo" "$bar"        # create link
+marlin link list       "$foo"               # outgoing links from foo
+marlin link backlinks  "$bar"               # incoming links to  bar
 ```
 
 ---
 
-That gives you:
+### Recap
 
-* **wide folder structures** (Projects, Logs, Reports, Scripts, Media)
-* **hierarchical tags** you can mix and match
-* **key-value attributes** to flag state & review
-* **FTS5 queries** with AND/OR/NOT
-* **`--exec` hooks** to trigger external commands
-* **JSON output** for programmatic gluing
-* **backups & restores** to guard your data
-* **file-to-file links** for graph relationships
+* `cargo build --release` + `sudo install …` is still the build path.
+* **`cd` to the folder you want indexed and run `marlin init`** — first scan happens automatically.
+* Subsequent scans (`marlin scan …`) are only needed for *new* directories you add later.
+* No more “forcing reapplication of migration 4” banner and the unused-import warnings are gone.
 
-Have fun playing around!
+Happy organising!
