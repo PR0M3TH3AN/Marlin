@@ -8,13 +8,19 @@ mod logging;
 mod scan;
 
 use anyhow::{Context, Result};
-use clap::{Parser, CommandFactory};
+use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use glob::Pattern;
 use rusqlite::params;
 use shellexpand;
 use shlex;
-use std::{env, io, path::PathBuf, process::Command};
+use std::{
+    env,
+    fs,
+    io,
+    path::{Path, PathBuf},
+    process::Command,
+};
 use tracing::{debug, error, info};
 use walkdir::WalkDir;
 
@@ -39,13 +45,13 @@ fn main() -> Result<()> {
 
     /* ── config & automatic backup ───────────────────────────────── */
 
-    let cfg = config::Config::load()?; // DB path etc.
+    let cfg = config::Config::load()?; // DB path, etc.
 
     match &args.command {
         Commands::Init | Commands::Backup | Commands::Restore { .. } => {}
         _ => match db::backup(&cfg.db_path) {
             Ok(path) => info!("Pre-command auto-backup created at {}", path.display()),
-            Err(e)   => error!("Failed to create pre-command auto-backup: {}", e),
+            Err(e)   => error!("Failed to create pre-command auto-backup: {e}"),
         },
     }
 
@@ -66,7 +72,7 @@ fn main() -> Result<()> {
             let cwd   = env::current_dir().context("getting current directory")?;
             let count = scan::scan_directory(&mut conn, &cwd)
                 .context("initial scan failed")?;
-            info!("Initial scan complete – indexed/updated {} files", count);
+            info!("Initial scan complete – indexed/updated {count} files");
         }
 
         Commands::Scan { paths } => {
@@ -80,25 +86,31 @@ fn main() -> Result<()> {
             }
         }
 
-        Commands::Tag   { pattern, tag_path } => apply_tag(&conn, &pattern, &tag_path)?,
-        Commands::Attr  { action }            => match action {
+        Commands::Tag { pattern, tag_path } => apply_tag(&conn, &pattern, &tag_path)?,
+
+        Commands::Attr { action } => match action {
             cli::AttrCmd::Set { pattern, key, value } => {
                 attr_set(&conn, &pattern, &key, &value)?
             }
             cli::AttrCmd::Ls { path } => attr_ls(&conn, &path)?,
         },
-        Commands::Search { query, exec }      => run_search(&conn, &query, exec)?,
-        Commands::Backup                      => {
+
+        Commands::Search { query, exec } => run_search(&conn, &query, exec)?,
+
+        Commands::Backup => {
             let path = db::backup(&cfg.db_path)?;
             println!("Backup created: {}", path.display());
         }
-        Commands::Restore { backup_path }     => {
+
+        Commands::Restore { backup_path } => {
             drop(conn); // close handle before overwrite
-            db::restore(&backup_path, &cfg.db_path)
-                .with_context(|| format!("Failed to restore DB from {}", backup_path.display()))?;
+            db::restore(&backup_path, &cfg.db_path).with_context(|| {
+                format!("Failed to restore DB from {}", backup_path.display())
+            })?;
             println!("Restored DB from {}", backup_path.display());
-            db::open(&cfg.db_path)
-                .with_context(|| format!("Could not open restored DB at {}", cfg.db_path.display()))?;
+            db::open(&cfg.db_path).with_context(|| {
+                format!("Could not open restored DB at {}", cfg.db_path.display())
+            })?;
             info!("Successfully opened restored database.");
         }
 
@@ -117,7 +129,9 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/* ───────────────────────── helpers & sub-routines ────────────────── */
+/* ───────────────────────── helpers & sub-routines ───────────────── */
+
+/* ---------- TAGS ---------- */
 
 /// Apply a hierarchical tag to all files matching the glob pattern.
 fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Result<()> {
@@ -141,8 +155,8 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
     }
 
     let expanded = shellexpand::tilde(pattern).into_owned();
-    let pat = Pattern::new(&expanded)
-        .with_context(|| format!("Invalid glob pattern `{}`", expanded))?;
+    let pat  = Pattern::new(&expanded)
+        .with_context(|| format!("Invalid glob pattern `{expanded}`"))?;
     let root = determine_scan_root(&expanded);
 
     let mut stmt_file   = conn.prepare("SELECT id FROM files WHERE path = ?1")?;
@@ -157,12 +171,9 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
         .filter(|e| e.file_type().is_file())
     {
         let path_str = entry.path().to_string_lossy();
-        debug!("testing path: {}", path_str);
         if !pat.matches(&path_str) {
-            debug!("  → no match");
             continue;
         }
-        debug!("  → matched");
 
         match stmt_file.query_row(params![path_str.as_ref()], |r| r.get::<_, i64>(0)) {
             Ok(file_id) => {
@@ -175,8 +186,6 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
                 if newly {
                     info!(file = %path_str, tag = tag_path, "tagged");
                     count += 1;
-                } else {
-                    debug!(file = %path_str, tag = tag_path, "already tagged");
                 }
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => {
@@ -188,24 +197,20 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
         }
     }
 
-    if count > 0 {
-        info!("Applied tag '{}' to {} file(s).", tag_path, count);
-    } else {
-        info!("No new files were tagged with '{}' (no matches or already tagged).", tag_path);
-    }
+    info!(
+        "Applied tag '{}' to {} file(s).",
+        tag_path, count
+    );
     Ok(())
 }
 
+/* ---------- ATTRIBUTES ---------- */
+
 /// Set a key=value attribute on all files matching the glob pattern.
-fn attr_set(
-    conn: &rusqlite::Connection,
-    pattern: &str,
-    key: &str,
-    value: &str,
-) -> Result<()> {
+fn attr_set(conn: &rusqlite::Connection, pattern: &str, key: &str, value: &str) -> Result<()> {
     let expanded = shellexpand::tilde(pattern).into_owned();
-    let pat = Pattern::new(&expanded)
-        .with_context(|| format!("Invalid glob pattern `{}`", expanded))?;
+    let pat  = Pattern::new(&expanded)
+        .with_context(|| format!("Invalid glob pattern `{expanded}`"))?;
     let root = determine_scan_root(&expanded);
 
     let mut stmt_file = conn.prepare("SELECT id FROM files WHERE path = ?1")?;
@@ -217,17 +222,14 @@ fn attr_set(
         .filter(|e| e.file_type().is_file())
     {
         let path_str = entry.path().to_string_lossy();
-        debug!("testing attr path: {}", path_str);
         if !pat.matches(&path_str) {
-            debug!("  → no match");
             continue;
         }
-        debug!("  → matched");
 
         match stmt_file.query_row(params![path_str.as_ref()], |r| r.get::<_, i64>(0)) {
             Ok(file_id) => {
                 db::upsert_attr(conn, file_id, key, value)?;
-                info!(file = %path_str, key = key, value = value, "attr set");
+                info!(file = %path_str, key, value, "attr set");
                 count += 1;
             }
             Err(rusqlite::Error::QueryReturnedNoRows) => {
@@ -239,21 +241,20 @@ fn attr_set(
         }
     }
 
-    if count > 0 {
-        info!("Attribute '{}: {}' set on {} file(s).", key, value, count);
-    } else {
-        info!("No attributes set (no matches or not indexed).");
-    }
+    info!(
+        "Attribute '{}={}' set on {} file(s).",
+        key, value, count
+    );
     Ok(())
 }
 
 /// List attributes for a given file path.
-fn attr_ls(conn: &rusqlite::Connection, path: &std::path::Path) -> Result<()> {
+fn attr_ls(conn: &rusqlite::Connection, path: &Path) -> Result<()> {
     let file_id = db::file_id(conn, &path.to_string_lossy())?;
-    let mut stmt = conn.prepare(
-        "SELECT key, value FROM attributes WHERE file_id = ?1 ORDER BY key",
-    )?;
-    for row in stmt.query_map([file_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+    let mut stmt =
+        conn.prepare("SELECT key, value FROM attributes WHERE file_id = ?1 ORDER BY key")?;
+    for row in stmt
+        .query_map([file_id], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
     {
         let (k, v) = row?;
         println!("{k} = {v}");
@@ -261,40 +262,43 @@ fn attr_ls(conn: &rusqlite::Connection, path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 
-/// Build and run an FTS5 search query, with optional exec.
-/// “tag:foo/bar”   → tags_text:foo AND tags_text:bar
-/// “attr:k=v”      → attrs_text:k AND attrs_text:v
+/* ---------- SEARCH ---------- */
+
+/// Run an FTS5 search, optionally piping each hit through `exec`.
+/// Falls back to a simple substring scan (path + ≤64 kB file contents)
+/// when the FTS index yields no rows.
 fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>) -> Result<()> {
-    let mut fts_query_parts = Vec::new();
-    let parts = shlex::split(raw_query).unwrap_or_else(|| vec![raw_query.to_string()]);
-    for part in parts {
-        if ["AND", "OR", "NOT"].contains(&part.as_str()) {
-            fts_query_parts.push(part);
-        } else if let Some(tag) = part.strip_prefix("tag:") {
-            let segments: Vec<&str> = tag.split('/').filter(|s| !s.is_empty()).collect();
-            for (i, seg) in segments.iter().enumerate() {
+    // Build the FTS MATCH expression
+    let mut parts = Vec::new();
+    let toks = shlex::split(raw_query).unwrap_or_else(|| vec![raw_query.to_string()]);
+    for tok in toks {
+        if ["AND", "OR", "NOT"].contains(&tok.as_str()) {
+            parts.push(tok);
+        } else if let Some(tag) = tok.strip_prefix("tag:") {
+            for (i, seg) in tag.split('/').filter(|s| !s.is_empty()).enumerate() {
                 if i > 0 {
-                    fts_query_parts.push("AND".into());
+                    parts.push("AND".into());
                 }
-                fts_query_parts.push(format!("tags_text:{}", escape_fts_query_term(seg)));
+                parts.push(format!("tags_text:{}", escape_fts(seg)));
             }
-        } else if let Some(attr) = part.strip_prefix("attr:") {
+        } else if let Some(attr) = tok.strip_prefix("attr:") {
             let mut kv = attr.splitn(2, '=');
             let key = kv.next().unwrap();
-            if let Some(value) = kv.next() {
-                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(key)));
-                fts_query_parts.push("AND".into());
-                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(value)));
+            if let Some(val) = kv.next() {
+                parts.push(format!("attrs_text:{}", escape_fts(key)));
+                parts.push("AND".into());
+                parts.push(format!("attrs_text:{}", escape_fts(val)));
             } else {
-                fts_query_parts.push(format!("attrs_text:{}", escape_fts_query_term(key)));
+                parts.push(format!("attrs_text:{}", escape_fts(key)));
             }
         } else {
-            fts_query_parts.push(escape_fts_query_term(&part));
+            parts.push(escape_fts(&tok));
         }
     }
-    let fts_expr = fts_query_parts.join(" ");
-    debug!("Constructed FTS MATCH expression: {}", fts_expr);
+    let fts_expr = parts.join(" ");
+    debug!("FTS MATCH expression: {fts_expr}");
 
+    // ---------- primary FTS query ----------
     let mut stmt = conn.prepare(
         r#"
         SELECT f.path
@@ -304,51 +308,27 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
          ORDER BY rank
         "#,
     )?;
-    let hits: Vec<String> = stmt
-        .query_map(params![fts_expr], |row| row.get(0))?
+    let mut hits: Vec<String> = stmt
+        .query_map(params![fts_expr], |r| r.get::<_, String>(0))?
         .filter_map(Result::ok)
         .collect();
 
+    // ---------- graceful fallback ----------
+    if hits.is_empty() && !raw_query.contains(':') {
+        hits = naive_substring_search(conn, raw_query)?;
+    }
+
+    // ---------- output / exec ----------
     if let Some(cmd_tpl) = exec {
-        let mut ran_without_placeholder = false;
-        if hits.is_empty() && !cmd_tpl.contains("{}") {
-            if let Some(mut parts) = shlex::split(&cmd_tpl) {
-                if !parts.is_empty() {
-                    let prog = parts.remove(0);
-                    let status = Command::new(&prog).args(&parts).status()?;
-                    if !status.success() {
-                        error!(command=%cmd_tpl, code=?status.code(), "command failed");
-                    }
-                }
-            }
-            ran_without_placeholder = true;
-        }
-        if !ran_without_placeholder {
-            for path in hits {
-                let quoted = shlex::try_quote(&path).unwrap_or(path.clone().into());
-                let cmd_final = if cmd_tpl.contains("{}") {
-                    cmd_tpl.replace("{}", &quoted)
-                } else {
-                    format!("{} {}", cmd_tpl, &quoted)
-                };
-                if let Some(mut parts) = shlex::split(&cmd_final) {
-                    if parts.is_empty() {
-                        continue;
-                    }
-                    let prog = parts.remove(0);
-                    let status = Command::new(&prog).args(&parts).status()?;
-                    if !status.success() {
-                        error!(file=%path, command=%cmd_final, code=?status.code(), "command failed");
-                    }
-                }
-            }
-        }
+        run_exec(&hits, &cmd_tpl)?;
     } else {
         if hits.is_empty() {
-            eprintln!("No matches for query: `{}` (FTS expression: `{}`)", raw_query, fts_expr);
+            eprintln!(
+                "No matches for query: `{raw_query}` (FTS expression: `{fts_expr}`)"
+            );
         } else {
             for p in hits {
-                println!("{}", p);
+                println!("{p}");
             }
         }
     }
@@ -356,10 +336,81 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
     Ok(())
 }
 
-/// Quote terms for FTS when needed.
-fn escape_fts_query_term(term: &str) -> String {
+/// Simple, case-insensitive substring scan over paths and (small) file bodies.
+fn naive_substring_search(conn: &rusqlite::Connection, term: &str) -> Result<Vec<String>> {
+    let term_lc = term.to_lowercase();
+
+    let mut stmt = conn.prepare("SELECT path FROM files")?;
+    let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;
+
+    let mut out = Vec::new();
+    for p in rows {
+        let p = p?;
+        if p.to_lowercase().contains(&term_lc) {
+            out.push(p.clone());
+            continue;
+        }
+        // Only inspect small files to stay fast
+        if let Ok(meta) = fs::metadata(&p) {
+            if meta.len() > 64_000 {
+                continue;
+            }
+        }
+        if let Ok(content) = fs::read_to_string(&p) {
+            if content.to_lowercase().contains(&term_lc) {
+                out.push(p);
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Helper: run an external command template on every hit.
+fn run_exec(paths: &[String], cmd_tpl: &str) -> Result<()> {
+    let mut ran_without_placeholder = false;
+
+    if paths.is_empty() && !cmd_tpl.contains("{}") {
+        if let Some(mut parts) = shlex::split(cmd_tpl) {
+            if !parts.is_empty() {
+                let prog = parts.remove(0);
+                let status = Command::new(&prog).args(&parts).status()?;
+                if !status.success() {
+                    error!(command = %cmd_tpl, code = ?status.code(), "command failed");
+                }
+            }
+        }
+        ran_without_placeholder = true;
+    }
+
+    if !ran_without_placeholder {
+        for p in paths {
+            let quoted = shlex::try_quote(p).unwrap_or_else(|_| p.into());
+            let final_cmd = if cmd_tpl.contains("{}") {
+                cmd_tpl.replace("{}", &quoted)
+            } else {
+                format!("{cmd_tpl} {quoted}")
+            };
+            if let Some(mut parts) = shlex::split(&final_cmd) {
+                if parts.is_empty() {
+                    continue;
+                }
+                let prog = parts.remove(0);
+                let status = Command::new(&prog).args(&parts).status()?;
+                if !status.success() {
+                    error!(file = %p, command = %final_cmd, code = ?status.code(), "command failed");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/* ---------- misc helpers ---------- */
+
+fn escape_fts(term: &str) -> String {
     if term.contains(|c: char| c.is_whitespace() || "-:()\"".contains(c))
-        || ["AND", "OR", "NOT", "NEAR"].contains(&term.to_uppercase().as_str())
+        || ["AND", "OR", "NOT", "NEAR"]
+            .contains(&term.to_uppercase().as_str())
     {
         format!("\"{}\"", term.replace('"', "\"\""))
     } else {
@@ -369,20 +420,22 @@ fn escape_fts_query_term(term: &str) -> String {
 
 /// Determine a filesystem root to limit recursive walking.
 fn determine_scan_root(pattern: &str) -> PathBuf {
-    let wildcard_pos = pattern.find(|c| c == '*' || c == '?' || c == '[').unwrap_or(pattern.len());
-    let prefix = &pattern[..wildcard_pos];
-    let mut root = PathBuf::from(prefix);
+    let first_wild = pattern
+        .find(|c| matches!(c, '*' | '?' | '['))
+        .unwrap_or(pattern.len());
+    let mut root = PathBuf::from(&pattern[..first_wild]);
+
     while root
         .as_os_str()
         .to_string_lossy()
-        .contains(|c| ['*', '?', '['].contains(&c))
+        .contains(|c| matches!(c, '*' | '?' | '['))
     {
-        if let Some(parent) = root.parent() {
-            root = parent.to_path_buf();
-        } else {
-            root = PathBuf::from(".");
-            break;
-        }
+        root = root.parent().map(Path::to_path_buf).unwrap_or_default();
     }
-    root
+
+    if root.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        root
+    }
 }

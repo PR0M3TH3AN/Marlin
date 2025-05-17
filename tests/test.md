@@ -62,7 +62,7 @@ If you wire **“cargo test --all”** into CI (GitHub Actions, GitLab, etc.), p
 ```bash
 git pull && cargo build --release &&
 sudo install -Dm755 target/release/marlin /usr/local/bin/marlin &&
-cargo test --test e2e -- --nocapture
+cargo test --all -- --nocapture
 ```
 
 Stick that in a shell alias (`alias marlin-ci='…'`) and you’ve got a 5-second upgrade-and-verify loop.
