@@ -2,21 +2,24 @@
 
 # Marlin
 
-**Marlin** is a lightweight, metadata-driven file indexer that runs 100 % on your computer. It scans folders, stores paths and file stats in SQLite, lets you attach hierarchical **tags** and **custom attributes**, takes automatic snapshots, and offers instant full-text search via FTS5.  
+**Marlin** is a lightweight, metadata-driven file indexer that runs **100 % on your computer**.  
+It scans folders, stores paths and file stats in SQLite, lets you attach hierarchical **tags** and **custom attributes**, keeps timestamped **snapshots**, and offers instant full-text search via FTS5.  
 _No cloud, no telemetry – your data never leaves the machine._
 
 ---
 
 ## Feature highlights
 
-| Area           | What you get                                                                      |
-| -------------- | --------------------------------------------------------------------------------- |
-| **Safety**     | Timestamped backups (`marlin backup`) and one-command restore (`marlin restore`)  |
-| **Resilience** | Versioned, idempotent schema migrations – zero-downtime upgrades                  |
-| **Indexing**   | Fast multi-path scanner with SQLite WAL concurrency                               |
-| **Metadata**   | Hierarchical tags (`project/alpha`) & key-value attributes (`reviewed=yes`)       |
-| **Search**     | Prefix-aware FTS5 across paths, tags, and attributes; optional `--exec` per match |
-| **DX / Logs**  | Structured tracing (`RUST_LOG=debug`) for every operation                         |
+| Area                | What you get                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Safety**          | Timestamped backups (`marlin backup`) and one-command restore (`marlin restore`)                      |
+| **Resilience**      | Versioned, idempotent schema migrations – zero-downtime upgrades                                      |
+| **Indexing**        | Fast multi-path scanner with SQLite WAL concurrency                                                   |
+| **Metadata**        | Hierarchical tags (`project/alpha`) & key-value attributes (`reviewed=yes`)                           |
+| **Relations**       | Typed file ↔ file links (`marlin link`) with backlinks viewer                                         |
+| **Collections / Views** | Named playlists (`marlin coll`) & saved searches (`marlin view`) for instant recall                   |
+| **Search**          | Prefix-aware FTS5 across paths, tags, attrs & links; optional `--exec` per match <br>(grep-style context snippets coming Q3) |
+| **DX / Logs**       | Structured tracing (`RUST_LOG=debug`) for every operation                                             |
 
 ---
 
@@ -26,11 +29,11 @@ _No cloud, no telemetry – your data never leaves the machine._
 ┌──────────────┐  marlin scan          ┌─────────────┐
 │  your files  │ ─────────────────────▶│   SQLite    │
 │ (any folder) │                      │  files/tags │
-└──────────────┘   tag / attr          │ attrs / FTS │
-        ▲  search / exec              └──────┬──────┘
+└──────────────┘   tag / attr / link   │ attrs / FTS │
+        ▲   search / exec             └──────┬──────┘
         └────────── backup / restore          ▼
                                      timestamped snapshots
-```
+````
 
 ---
 
@@ -38,7 +41,7 @@ _No cloud, no telemetry – your data never leaves the machine._
 
 | Requirement        | Why                           |
 | ------------------ | ----------------------------- |
-| **Rust** ≥ 1.77    | Build toolchain (`rustup.rs`) |
+| **Rust ≥ 1.77**    | Build toolchain (`rustup.rs`) |
 | C build essentials | Builds bundled SQLite (Linux) |
 
 macOS & Windows users: let the Rust installer pull the matching build tools.
@@ -48,78 +51,63 @@ macOS & Windows users: let the Rust installer pull the matching build tools.
 ## Build & install
 
 ```bash
-git clone https://github.com/yourname/marlin.git
-cd marlin
+git clone https://github.com/PR0M3TH3AN/Marlin.git
+cd Marlin
 cargo build --release
 
-# (Optional) Install the binary into your PATH:
+# (Optional) install into your PATH
 sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
 ```
+
+---
 
 ## Quick start
 
-For a concise walkthrough, see [Quick start & Demo](marlin_demo.md).
+For a concise walkthrough—including **links, collections and views**—see
+[**Quick start & Demo**](marlin_demo.md).
 
-## Testing 
+---
+
+## Testing
 
 Below is a **repeat-able 3-step flow** you can use **every time you pull fresh code**.
 
----
-
-### 0  Prepare once
+### 0 Prepare once
 
 ```bash
-# Run once (or add to ~/.bashrc) so debug + release artefacts land
-# in the same predictable place.  Speeds-up future builds.
+# Put build artefacts in one place (faster incremental builds)
 export CARGO_TARGET_DIR=target
 ```
 
----
-
-### 1  Build the new binary
+### 1 Build the new binary
 
 ```bash
-git pull             # grab the latest commit
+git pull
 cargo build --release
 sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
 ```
 
-* `cargo build --release` – builds the optimised binary.
-* `install …` – copies it into your `$PATH` so `marlin` on the CLI is the fresh one.
-
----
-
-### 2  Run the smoke-test suite
+### 2 Run the smoke-test suite
 
 ```bash
-# Runs the end-to-end test we added in tests/e2e.rs
 cargo test --test e2e -- --nocapture
 ```
 
-* `--test e2e` – compiles and runs **only** `tests/e2e.rs`; other unit-tests are skipped (add them later if you like).
-* `--nocapture` – streams stdout/stderr so you can watch each CLI step in real time.
-* Exit-code **0** ➜ everything passed.
-  Any non-zero exit or a red ✗ line means a step failed; the assert’s diff will show the command and its output.
+*Streams CLI output live; exit-code 0 = all good.*
 
----
-
-### 3  (Optionally) run all tests
+### 3 (Optionally) run **all** tests
 
 ```bash
 cargo test --all -- --nocapture
 ```
 
-This will execute:
+This now covers:
 
 * unit tests in `src/**`
-* every file in `tests/`
+* positive & negative integration suites (`tests/pos.rs`, `tests/neg.rs`)
 * doc-tests
 
-If you wire **“cargo test --all”** into CI (GitHub Actions, GitLab, etc.), pushes that break a workflow will be rejected automatically.
-
----
-
-#### One-liner helper (copy/paste)
+#### One-liner helper
 
 ```bash
 git pull && cargo build --release &&
@@ -127,15 +115,19 @@ sudo install -Dm755 target/release/marlin /usr/local/bin/marlin &&
 cargo test --test e2e -- --nocapture
 ```
 
-Stick that in a shell alias (`alias marlin-ci='…'`) and you’ve got a 5-second upgrade-and-verify loop.
+Alias it as `marlin-ci` for a 5-second upgrade-and-verify loop.
+
+---
 
 ### Database location
 
-* **Linux**  `~/.local/share/marlin/index.db`
-* **macOS**  `~/Library/Application Support/marlin/index.db`
-* **Windows** `%APPDATA%\marlin\index.db`
+| OS          | Default path                                    |
+| ----------- | ----------------------------------------------- |
+| **Linux**   | `~/.local/share/marlin/index.db`                |
+| **macOS**   | `~/Library/Application Support/marlin/index.db` |
+| **Windows** | `%APPDATA%\marlin\index.db`                     |
 
-Override with:
+Override:
 
 ```bash
 export MARLIN_DB_PATH=/path/to/custom.db
@@ -148,55 +140,57 @@ export MARLIN_DB_PATH=/path/to/custom.db
 ```text
 marlin <COMMAND> [ARGS]
 
-init                             create / migrate database
-scan   <PATHS>...                walk directories & index files
-tag    "<glob>" <tag_path>       add hierarchical tag
-attr   set <pattern> <key> <value>  manage custom attributes
-attr   ls <path>
-search <query> [--exec CMD]      FTS5 query, optionally run CMD on each hit
-backup                           create timestamped snapshot in backups/
-restore <snapshot.db>            replace DB with snapshot
-completions <shell>              generate shell completions
+init                               create / migrate DB **and perform an initial scan of the cwd**
+scan     <PATHS>...                walk directories & (re)index files
+tag      "<glob>" <tag_path>       add hierarchical tag
+attr     set <pattern> <key> <val> set or update custom attribute
+attr     ls  <path>                list attributes
+link     add|rm|list|backlinks     manage typed file-to-file relations
+coll     create|add|list           manage named collections (“playlists”)
+view     save|list|exec            save and run smart views (saved queries)
+search   <query> [--exec CMD]      FTS5 query; optionally run CMD per hit
+backup                             create timestamped snapshot in `backups/`
+restore  <snapshot.db>             replace DB with snapshot
+completions <shell>                generate shell completions
 ```
 
-### Attribute subcommands
+### Attribute sub-commands
 
-| Command    | Example                                        |
-| ---------- | ---------------------------------------------- |
-| `attr set` | `marlin attr set ~/Docs/**/*.pdf reviewed yes` |
-| `attr ls`  | `marlin attr ls ~/Docs/report.pdf`             |
+| Command     | Example                                          |
+| ----------- | ------------------------------------------------ |
+| `attr set`  | `marlin attr set ~/Docs/**/*.pdf reviewed yes`   |
+| `attr ls`   | `marlin attr ls ~/Docs/report.pdf`               |
+| JSON output | `marlin --format=json attr ls ~/Docs/report.pdf` |
 
 ---
 
 ## Backups & restore
-
-**Create snapshot**
 
 ```bash
 marlin backup
 # → ~/.local/share/marlin/backups/backup_2025-05-14_22-15-30.db
 ```
 
-**Restore snapshot**
-
 ```bash
 marlin restore ~/.local/share/marlin/backups/backup_2025-05-14_22-15-30.db
 ```
 
-Marlin also takes an **automatic safety backup before every non-init command**.
+> Marlin also creates an **automatic safety backup before every non-`init` command.**
+> *Auto-prune (`backup --prune <N>`) lands in Q2.*
 
 ---
 
 ## Upgrading
 
 ```bash
-cargo install --path . --force    # rebuild & replace installed binary
+cargo install --path . --force   # rebuild & replace installed binary
 ```
 
-The versioned migration system preserves your data across upgrades.
+Versioned migrations preserve your data across upgrades.
 
 ---
 
 ## License
 
-MIT – see `LICENSE`
+MIT – see [`LICENSE`](LICENSE).
+
