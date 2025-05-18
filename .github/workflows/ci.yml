@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Rust (stable)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build (release)
+        run: cargo build --workspace --release
+
+      - name: Run tests
+        run: cargo test --all -- --nocapture
+
+  coverage:
+    name: Code Coverage (Tarpaulin)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Rust (nightly)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+
+      - name: Install tarpaulin prerequisites
+        run: |
+          rustup component add llvm-tools-preview
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Run coverage
+        run: cargo tarpaulin --workspace --out Xml --fail-under 85
+
+  benchmark:
+    name: Performance Benchmark (Hyperfine)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Rust (stable)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install benchmarking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y hyperfine jq bc
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Run cold-start benchmark
+        run: |
+          # measure cold start init latency
+          hyperfine \
+            --warmup 3 \
+            --export-json perf.json \
+            'target/release/marlin init'
+
+      - name: Enforce P95 ≤ 3s
+        run: |
+          p95=$(jq '.results[0].percentiles["95.00"]' perf.json)
+          echo "P95 init latency: ${p95}s"
+          if (( $(echo "$p95 > 3.0" | bc -l) )); then
+            echo "::error ::Performance threshold exceeded (P95 > 3.0s)"  
+            exit 1
+          fi
