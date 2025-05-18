@@ -1,194 +1,80 @@
-![Marlin Logo](https://raw.githubusercontent.com/PR0M3TH3AN/Marlin/refs/heads/main/assets/png/marlin_logo.png)
+# Marlin ― Delivery Road‑map **v3.2**
 
-# Marlin
+*Engineering‑ready – revised 2025‑05‑18*
 
-**Marlin** is a lightweight, metadata-driven file indexer that runs **100 % on your computer**. It scans folders, stores paths and file stats in SQLite, lets you attach hierarchical **tags** and **custom attributes**, keeps timestamped **snapshots**, and offers instant full-text search via FTS5. _No cloud, no telemetry – your data never leaves the machine._
-
----
-
-## Feature highlights
-
-| Area                | What you get                                                                                         |
-| ------------------- | ----------------------------------------------------------------------------------------------------- |
-| **Safety**          | Timestamped backups (`marlin backup`) and one-command restore (`marlin restore`)                      |
-| **Resilience**      | Versioned, idempotent schema migrations – zero-downtime upgrades                                      |
-| **Indexing**        | Fast multi-path scanner with SQLite WAL concurrency                                                   |
-| **Metadata**        | Hierarchical tags (`project/alpha`) & key-value attributes (`reviewed=yes`)                           |
-| **Relations**       | Typed file ↔ file links (`marlin link`) with backlinks viewer                                         |
-| **Collections / Views** | Named playlists (`marlin coll`) & saved searches (`marlin view`) for instant recall                   |
-| **Search**          | Prefix-aware FTS5 across paths, tags, attrs & links; optional `--exec` per match <br>(grep-style context snippets coming Q3) |
-| **DX / Logs**       | Structured tracing (`RUST_LOG=debug`) for every operation                                             |
+> **Legend** △ engineering artefact ✦ user‑visible deliverable
 
 ---
 
-## How it works
+## 0 · Methodology primer  (what “Done” means)
 
-```text
-┌──────────────┐  marlin scan          ┌─────────────┐
-│  your files  │ ─────────────────────▶│   SQLite    │
-│ (any folder) │                      │  files/tags │
-└──────────────┘   tag / attr / link   │ attrs / FTS │
-        ▲   search / exec             └──────┬──────┘
-        └────────── backup / restore          ▼
-                                     timestamped snapshots
-````
-
----
-
-## Prerequisites
-
-| Requirement        | Why                           |
-| ------------------ | ----------------------------- |
-| **Rust ≥ 1.77**    | Build toolchain (`rustup.rs`) |
-| C build essentials | Builds bundled SQLite (Linux) |
-
-macOS & Windows users: let the Rust installer pull the matching build tools.
+| Theme          | Project rule‑of‑thumb                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Branching**  | Trunk‑based. Feature branch → PR → 2 reviews → squash‑merge.                                                                          |
+| **Spec first** | Each epic begins with a **Design Proposal (DP‑xxx)** in `/docs/adr/` containing schema diffs, example CLI session, perf targets.      |
+| **Coverage**   | Tarpaulin gate ≥ 85 % **on lines touched this sprint** (checked in CI).                                                               |
+| **Perf gate**  | Cold‑start P95 ≤ 3 s on 100 k files **unless overridden in DP**. Regressions fail CI.                                                 |
+| **Docs**       | CLI flags & examples land in `README.md` **same PR**.  Docs tables (CLI cheatsheet, TUI key‑map) are auto‑generated during the build. |
+| **Demo**       | Closing each epic yields a ≤ 2‑min asciinema or GIF in `docs/demos/`.                                                                 |
 
 ---
 
-## Build & install
+## 1 · Bird’s‑eye table (engineering details + deliverables)
 
-```bash
-git clone https://github.com/PR0M3TH3AN/Marlin.git
-cd Marlin
-cargo build --release
-
-# (Optional) install into your PATH
-sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
-```
-
----
-
-## Quick start
-
-For a concise walkthrough—including **links, collections and views**—see
-[**Quick start & Demo**](marlin_demo.md).
-
----
-
-## Testing
-
-Below is a **repeat-able 3-step flow** you can use **every time you pull fresh code**.
-
-### 0 Prepare once
-
-```bash
-# Put build artefacts in one place (faster incremental builds)
-export CARGO_TARGET_DIR=target
-```
-
-### 1 Build the new binary
-
-```bash
-git pull
-cargo build --release
-sudo install -Dm755 target/release/marlin /usr/local/bin/marlin
-```
-
-### 2 Run the smoke-test suite
-
-```bash
-cargo test --test e2e -- --nocapture
-```
-
-*Streams CLI output live; exit-code 0 = all good.*
-
-### 3 (Optionally) run **all** tests
-
-```bash
-cargo test --all -- --nocapture
-```
-
-This now covers:
-
-* unit tests in `src/**`
-* positive & negative integration suites (`tests/pos.rs`, `tests/neg.rs`)
-* doc-tests
-
-#### One-liner helper
-
-```bash
-git pull && cargo build --release &&
-sudo install -Dm755 target/release/marlin /usr/local/bin/marlin &&
-cargo test --test e2e -- --nocapture
-```
-
-Alias it as `marlin-ci` for a 5-second upgrade-and-verify loop.
+| Phase / Sprint                                  | Timeline                      | Focus & Rationale                                        | ✦ Key UX Deliverables                                                                                   | △ Engineering artefacts / tasks                                                                                                                                                                                                                    | Definition of Done                                                                                   |
+| ----------------------------------------------- | ----------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Sprint 0 — Bootstrap & CI Baseline**          | **2025‑Q2<br>(now → 30 May)** | CI scaffolding, coverage, crate split                    | —                                                                                                       | • Split repo into **`libmarlin` (core)** + **`cli-bin`** + **`tui-bin`**  <br>• Tarpaulin coverage + Hyperfine perf jobs wired <br>• `build.rs` renders CLI cheatsheet from `commands.yaml` <br>• Docs / cheatsheet autogen step in GitHub Actions | `cargo test --all` passes with coverage gate ≥ 85 %; docs artefacts appear in build; crates compile. |
+| **Sprint α — Bedrock & Metadata Domains**       | **31 May → 13 Jun 2025**      | Lock schema v1.1, first metadata objects                 | • CLI stubs: `marlin link / coll / view` <br>• `marlin demo` interactive tour                           | • **DP‑001 Schema v1.1** (ER + migration scripts) <br>• Unit tests (`escape_fts`, `determine_scan_root`) <br>• GitHub Action for SQL dry‑run                                                                                                       | 100 % migrations green; demo prints ✅; logo badge shows schema version.                              |
+| **Epic 1 — Live‑Watch Mode & Backup Prune**     | **2025‑Q2**                   | Continuous indexing via FS events; backups never explode | • `marlin watch <dir>` (inotify / FSEvents) <br>• `backup --prune N` (auto‑prune pre‑ and post‑command) | • **DP‑002** file‑watch life‑cycle & debounce strategy <br>• Change‑table schema storing dirty file IDs <br>• Nightly prune CI job                                                                                                                 | 8 h stress‑watch alters 10 k files → < 1 % missed; backup dir size ≤ N; watch CPU idle < 3 %.        |
+| **Epic 2 — Dirty‑scan optimisation**            | **2025‑Q2**                   | Re‑index only paths marked dirty by watch table          | • `scan --dirty`                                                                                        | • Reuse change‑table from watch; Hyperfine benchmark script committed                                                                                                                                                                              | Dirty‑scan runtime ≤ 15 % full scan on 100 k corpus; bench job passes.                               |
+| **Phase 3 — Content FTS + Annotations**         | 2025‑Q3                       | Grep snippets, inline notes                              | • `search -C3` grep‑style context <br>• `annotate add/list`                                             | • **DP‑004** content‑blob strategy (inline vs ext‑table) <br>• `syntect` highlight PoC                                                                                                                                                             | Indexes 1 GB corpus ≤ 30 min; snippet CLI golden tests pass.                                         |
+| **Phase 4 — Versioning & De‑duplication**       | 2025‑Q3                       | Historic diffs, SHA‑256 dedupe                           | • `scan --rehash` <br>• `version diff <file>`                                                           | • **DP‑005** hash column + Bloom‑de‑dupe research                                                                                                                                                                                                  | Diff on 10 MB file ≤ 500 ms; duplicate sets emitted by CLI.                                          |
+| **Phase 5 — Tag Aliases & Semantic Booster**    | 2025‑Q3                       | Tame tag sprawl; start AI hints                          | • `tag alias add/ls/rm` <br>• `tag suggest`, `summary`                                                  | • **DP‑006** embeddings size & k‑NN search bench                                                                                                                                                                                                   | 95 % alias look‑ups resolved in one hop; suggest query ≤ 150 ms.                                     |
+| **Phase 6 — Search DSL v2 & Smart Views**       | 2025‑Q4                       | AND/OR, ranges, structured grammar; smart folders        | • New `nom` grammar <br>• Legacy parser behind **`--legacy-search`** (warn on use)                      | • **DP‑007** BNF + 30 acceptance strings <br>• Lexer fuzz tests (`cargo‑fuzz`)                                                                                                                                                                     | Old queries keep working; 0 panics in fuzz run ≥ 1 M cases.                                          |
+| **Phase 7 — Structured Workflows & Templates**  | 2025‑Q4                       | State graph, relationship templates                      | • `state set/log` <br>• `template apply`                                                                | • **DP‑008** workflow tables & YAML template spec <br>• Sample template e2e tests                                                                                                                                                                  | Create template, apply to 20 files → all attrs/link rows present; illegal transitions blocked.       |
+| **Phase 8 — TUI v1 + Lightweight Integrations** | 2026‑Q1                       | Keyboard UI, VS Code sidebar                             | • **`marlin‑tui`** binary (tiling panes, key‑map) <br>• Read‑only VS Code sidebar                       | • **DP‑009** TUI redraw budget & key‑map <br>• Crate split fully consumed                                                                                                                                                                          | TUI binary ≤ 2 MB; scroll redraw ≤ 4 ms; VS Code extension loads index.                              |
+| **Phase 9 — Dolphin Sidebar (MVP)**             | 2026‑Q1                       | Peek metadata inline in KDE Dolphin                      | • Qt/KIO sidebar                                                                                        | • **DP‑010** DB/IP bridge (D‑Bus vs UNIX socket) <br>• CMake packaging script                                                                                                                                                                      | Sidebar opens ≤ 150 ms; passes KDE lint.                                                             |
+| **Phase 10 — Full GUI & Multi‑device Sync**     | 2026‑Q2                       | Visual editor + optional sync backend                    | • Electron/Qt hybrid explorer UI <br>• Select & integrate sync (LiteFS / Postgres)                      | • **DP‑011** sync back‑end trade‑study <br>• Busy‑timeout/retry strategy for multi‑writer mode                                                                                                                                                     | CRUD round‑trip < 2 s between two nodes; 25 GUI e2e tests green.                                     |
 
 ---
 
-### Database location
+### 2 · Feature cross‑matrix (quick look‑ups)
 
-| OS          | Default path                                    |
-| ----------- | ----------------------------------------------- |
-| **Linux**   | `~/.local/share/marlin/index.db`                |
-| **macOS**   | `~/Library/Application Support/marlin/index.db` |
-| **Windows** | `%APPDATA%\marlin\index.db`                     |
-
-Override:
-
-```bash
-export MARLIN_DB_PATH=/path/to/custom.db
-```
-
----
-
-## CLI reference
-
-```text
-marlin <COMMAND> [ARGS]
-
-init                               create / migrate DB **and perform an initial scan of the cwd**
-scan     <PATHS>...                walk directories & (re)index files
-tag      "<glob>" <tag_path>       add hierarchical tag
-attr     set <pattern> <key> <val> set or update custom attribute
-attr     ls  <path>                list attributes
-link     add|rm|list|backlinks     manage typed file-to-file relations
-coll     create|add|list           manage named collections (“playlists”)
-view     save|list|exec            save and run smart views (saved queries)
-search   <query> [--exec CMD]      FTS5 query; optionally run CMD per hit
-backup                             create timestamped snapshot in `backups/`
-restore  <snapshot.db>             replace DB with snapshot
-completions <shell>                generate shell completions
-```
-
-### Attribute sub-commands
-
-| Command     | Example                                          |
-| ----------- | ------------------------------------------------ |
-| `attr set`  | `marlin attr set ~/Docs/**/*.pdf reviewed yes`   |
-| `attr ls`   | `marlin attr ls ~/Docs/report.pdf`               |
-| JSON output | `marlin --format=json attr ls ~/Docs/report.pdf` |
+| Capability                 | Sprint / Phase | CLI / GUI element                   | Linked DP |
+| -------------------------- | -------------- | ----------------------------------- | --------- |
+| Crate split & docs autogen | S0             | —                                   | –         |
+| Tarpaulin coverage gate    | S0             | —                                   | –         |
+| Watch mode (FS events)     | Epic 1         | `marlin watch .`                    | DP‑002    |
+| Backup auto‑prune          | Epic 1         | `backup --prune N`                  | –         |
+| Dirty‑scan                 | Epic 2         | `scan --dirty`                      | DP‑002    |
+| Grep snippets              | Phase 3        | `search -C3 …`                      | DP‑004    |
+| Hash / dedupe              | Phase 4        | `scan --rehash`                     | DP‑005    |
+| Tag aliases                | Phase 5        | `tag alias` commands                | DP‑006    |
+| Search DSL v2              | Phase 6        | new grammar, `--legacy-search` flag | DP‑007    |
+| Relationship templates     | Phase 7        | `template new/apply`                | DP‑008    |
+| TUI v1                     | Phase 8        | `marlin‑tui`                        | DP‑009    |
 
 ---
 
-## Backups & restore
+## 3 · Milestone acceptance checklist
 
-```bash
-marlin backup
-# → ~/.local/share/marlin/backups/backup_2025-05-14_22-15-30.db
-```
+Before a milestone is declared **shipped**:
 
-```bash
-marlin restore ~/.local/share/marlin/backups/backup_2025-05-14_22-15-30.db
-```
-
-> Marlin also creates an **automatic safety backup before every non-`init` command.**
-> *Auto-prune (`backup --prune <N>`) lands in Q2.*
+* [ ] **Spec** DP‑xxx merged with schema diff, ASCII‑cast demo
+* [ ] **Tests** Tarpaulin ≥ 85 % on changed lines; all suites green
+* [ ] **Perf guard** script passes on CI matrix (Ubuntu 22, macOS 14)
+* [ ] **Docs** auto‑regenerated; README & cheatsheet updated
+* [ ] **Demo** asciinema/GIF committed and linked in release notes
+* [ ] **Release tag** pushed; Cargo binary uploaded to GitHub Releases
 
 ---
 
-## Upgrading
+## 4 · Next immediate actions
 
-```bash
-cargo install --path . --force   # rebuild & replace installed binary
-```
-
-Versioned migrations preserve your data across upgrades.
-
----
-
-## License
-
-MIT – see [`LICENSE`](LICENSE).
+| # | Task                           | Owner  | Due           |
+| - | ------------------------------ | ------ | ------------- |
+| 1 | Crate split + CI baseline      | @alice | **26 May 25** |
+| 2 | Tarpaulin + Hyperfine jobs     | @bob   | **26 May 25** |
+| 3 | **DP‑001 Schema v1.1** draft   | @carol | **30 May 25** |
+| 4 | backup prune CLI + nightly job | @dave  | **05 Jun 25** |
 

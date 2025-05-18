@@ -1,59 +1,75 @@
-# Marlin Roadmap 2025 → 2026  📜
+# Marlin ― Delivery Road-map **v3**
 
-This document outlines the **official delivery plan** for Marlin over the next four quarters.
-Every work-item below is *time-boxed, testable,* and traceable back to an end-user benefit.
+*Engineering-ready version — updated 2025-05-17*
 
 > **Legend**
-> ✅  = item added/clarified in the latest planning round
-> Δ  = new sub-deliverable (wasn’t in the previous version)
+> **△** = engineering artefact (spec / ADR / perf target)  **✦** = user-visible deliverable
 
 ---
 
-## 1 Bird’s-eye Table
+## 0 · Methodology primer  (what “Done” means)
 
-| Phase / Sprint                                  | Timeline                  | Focus & Rationale                                                        | Key Deliverables (Δ = new)                                                                                                                                                                                                                                                                                  |                 |                                                                                                                    |
-| ----------------------------------------------- | ------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Sprint α – Bedrock & Metadata Domains**       | **2025-Q2 (now → 6 Jun)** | Stabilise schema & CI; land first metadata domains with discoverability. | Δ CI: `cargo test` + SQL dry-run<br>Δ Unit tests (`determine_scan_root`, `escape_fts`)<br>Δ Coverage: e2e `attr --format=json`<br>Δ Refactor: move `naive_substring_search` to shared util<br>Migrations: `links`, `collections`, `views`<br>CLI stubs: `link`, `coll`, `view`<br>`marlin demo` walkthrough |                 |                                                                                                                    |
-| **Epic 1 – Scale & Reliability**                | 2025-Q2                   | Keep scans fast; bullet-proof CI at 100 k files.                         | Δ Dirty-flag column + `scan --dirty`<br>Benchmarks: full vs dirty scan (100 k)<br>Replace per-row triggers with periodic rebuild<br>CI edge-case tests                                                                                                                                                      |                 |                                                                                                                    |
-| **Epic 2 – Live Mode & Self-Pruning Backups**   | 2025-Q2                   | Continuous indexing & hygiene—Marlin “just works”.                       | Δ `marlin watch [dir]` (notify/FSEvents)<br>Δ `backup --prune <N>` + auto-prune post-scan<br>Daily / PR-merge prune in CI                                                                                                                                                                                   |                 |                                                                                                                    |
-| **Phase 3 – Content FTS & Annotations**         | 2025-Q3                   | Index file bodies, grep-style context, inline notes.                     | `files.content` + migration<br>Extend `files_fts` (context snippets `-C`)<br>`annotations` table + triggers<br>CLI \`annotate add                                                                                                                                                                           | list\`          |                                                                                                                    |
-| **Phase 4 – Versioning & Deduplication**        | 2025-Q3                   | History, diffs & duplicate detection.                                    | `files.hash` (SHA-256)<br>`scan --rehash` refresh<br>CLI `version diff <file>`                                                                                                                                                                                                                              |                 |                                                                                                                    |
-| **Phase 5 – Tag Aliases & Semantic Booster**    | 2025-Q3                   | Tame tag sprawl; seed AI-powered suggestions.                            | `canonical_id` on `tags`; CLI `tag alias …`<br>`embeddings` table + `scan --embed`<br>CLI `tag suggest`, `similarity scan`, `summary <file>`                                                                                                                                                                |                 |                                                                                                                    |
-| **Phase 6 – Search DSL v2 & Smart Views**       | 2025-Q4                   | Robust grammar + virtual folders.                                        | Replace parser with **`nom`** grammar (`AND`, `OR`, `()` …)<br>CLI \`view save                                                                                                                                                                                                                              | list            | exec\` with aliases & paging                                                                                       |
-| **Phase 7 – Structured Workflows**              | 2025-Q4                   | First-class task / state / reminder / event life-cycles.                 | ✅ State engine (`files.state`, `state_changes`)<br>CLI \`state set                                                                                                                                                                                                                                          | transitions add | log`<br>✅ Task extractor (`tasks` table) + CLI<br>`templates`+ validation<br>CLI`remind …`, `event …`, `timeline\` |
-| **Phase 8 – Lightweight Integrations**          | 2026-Q1                   | Surface Marlin in editors / terminal.                                    | VS Code & TUI extension (tags / attrs / links / notes)                                                                                                                                                                                                                                                      |                 |                                                                                                                    |
-| **Phase 9 – Dolphin Sidebar Plugin (MVP)**      | 2026-Q1                   | Read-only Qt sidebar for Linux file managers.                            | Qt plug-in: tags, attrs, links, annotations                                                                                                                                                                                                                                                                 |                 |                                                                                                                    |
-| **Phase 10 – Full Edit UI & Multi-Device Sync** | 2026-Q2                   | In-place metadata editor & optional sync layer.                          | GUI editors (tags, views, tasks, reminders, events)<br>Pick/implement sync backend (rqlite, Litestream, …)                                                                                                                                                                                                  |                 |                                                                                                                    |
+| Theme          | Project rule-of-thumb                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Branching**  | Trunk-based. Feature branches → PR → 2 reviews → squash-merge.                                                                   |
+| **Spec first** | Every epic starts with a **Design Proposal (DP-xxx)** in `/docs/adr/`.   Include schema diffs, example CLI session, perf budget. |
+| **Tests**      | Unit + integration coverage ≥ 85 % on lines **touched in the sprint** (checked by Tarpaulin).                                    |
+| **Perf gate**  | Cold start P95 ≤ 3 s on 100 k files **unless overridden in DP**. Regressions fail CI.                                            |
+| **Docs**       | CLI flags & examples land in `README.md` **same PR** that ships the code.                                                        |
+| **Demo**       | Closing each epic produces a 2-min asciinema or gif in `docs/demos/`.                                                            |
 
 ---
 
-## 2 Narrative & Dependencies
+## 1 · Bird’s-eye table (now includes engineering columns)
 
-1. **Lock down core schema & demo** *(Sprint α).*
-   Developers get immediate feedback via the `marlin demo` command while CI ensures migrations never regress.
-
-2. **Scale & Live Mode** *(Epics 1-2).*
-   Dirty scanning, file-watching and auto-pruned backups guarantee snappy, hands-off operation even on six-figure corpora.
-
-3. **Richer Search** *(Phases 3-6).*
-   Body-content FTS + grep-style snippets lay the groundwork; `nom` grammar then elevates power-user queries and smart views.
-
-4. **Workflow Layers** *(Phase 7).*
-   State transitions, tasks and reminders turn Marlin from a passive index into an active workflow engine.
-
-5. **UX Expansions** *(Phases 8-10).*
-   Start lightweight (VS Code / TUI), graduate to a read-only Dolphin plug-in, then ship full editing & sync for multi-device teams.
-
-Every outer milestone depends only on the completion of the rows above it, **so shipping discipline in early sprints de-risks the headline features down the line.**
+| Phase / Sprint                                | Timeline                      | Focus & Rationale                                     | ✦ Key UX Deliverables                                                           | △ Engineering artefacts / tasks                                                                                                        | Definition of Done                                                                                                             |                                                                                     |                                                                                            |                                                                                                          |
+| --------------------------------------------- | ----------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **Sprint α — Bedrock & Metadata Domains**     | **2025-Q2<br>(now → 06 Jun)** | Lock schema, smoking-fast CI, first metadata objects. | • CLI stubs: `marlin link / coll / view`<br>• `marlin demo` interactive tour    | • DP-001 Schema v1.1 (ER + migration scripts)<br>• Unit tests (`escape_fts`, `determine_scan_root`)<br>• GitHub Action for SQL dry-run | 100 % migrations green on CI; demo command prints green tick                                                                   |                                                                                     |                                                                                            |                                                                                                          |
+| **Epic 1 — Scale & Reliability**              | 2025-Q2                       | Stay fast @ 100 k files                               | • `scan --dirty` (re-index touched rows only)                                   | • DP-002 Dirty-flag design + FTS rebuild cadence<br>• Hyperfine benchmark script committed                                             | Dirty scan vs full ≤ 15 % runtime on 100 k corpus; benchmark job passes                                                        |                                                                                     |                                                                                            |                                                                                                          |
+| **Epic 2 — Live Mode & Self-Pruning Backups** | 2025-Q2                       | “Just works” indexing, DB never explodes              | • `marlin watch <dir>` (notify/FSEvents)<br>• `backup --prune N` & auto-prune   | • DP-003 file-watcher life-cycle & debouncing<br>• Integration test with inotify-sim <br>• Cron-style GitHub job for nightly prune     | 8 h stress-watch alters 10 k files < 1 % misses; backup dir ≤ N                                                                |                                                                                     |                                                                                            |                                                                                                          |
+| **Phase 3 — Content FTS + Annotations**       | 2025-Q3                       | Search inside files, leave notes                      | • Grep-style snippet output (`-C3`)<br>• \`marlin annotate add                  | list\`                                                                                                                                 | • DP-004 content-blob strategy (inline vs ext-table)<br>• Syntax-highlight via `syntect` PoC<br>• New FTS triggers unit-tested | Indexes 1 GB corpus in ≤ 30 min; snippet CLI passes golden-file tests               |                                                                                            |                                                                                                          |
+| **Phase 4 — Versioning & Deduplication**      | 2025-Q3                       | Historic diffs, detect dupes                          | • `scan --rehash` (SHA-256)<br>• `version diff <file>`                          | • DP-005 hash column + Bloom-de-dupe<br>• Binary diff adapter research                                                                 | Diff on 10 MB file ≤ 500 ms; dupes listed via CLI                                                                              |                                                                                     |                                                                                            |                                                                                                          |
+| **Phase 5 — Tag Aliases & Semantic Booster**  | 2025-Q3                       | Tame tag sprawl, start AI hints                       | • \`tag alias add                                                               | ls                                                                                                                                     | rm`<br>• `tag suggest`, `summary\`                                                                                             | • DP-006 embeddings size & model choice<br>• Vector store schema + k-NN index bench | 95 % of “foo/bar\~foo” alias look-ups resolve in one hop; suggest CLI returns ≤ 150 ms     |                                                                                                          |
+| **Phase 6 — Search DSL v2 & Smart Views**     | 2025-Q4                       | Pro-grade query language                              | • New `nom` grammar: AND/OR, parentheses, ranges                                | • DP-007 BNF + 30 acceptance strings<br>• Lexer fuzz-tests with `cargo-fuzz`                                                           | Old queries keep working (migration shim); 0 crashes in fuzz run ≥ 1 M cases                                                   |                                                                                     |                                                                                            |                                                                                                          |
+| **Phase 7 — Structured Workflows**            | 2025-Q4                       | Tasks, state, reminders, templates                    | • \`state set                                                                   | transitions add                                                                                                                        | log`<br>• `task scan                                                                                                           | list`<br>• **NEW:** `template apply\` for relationship templates                    | • DP-008 Workflow tables & validation<br>• Sample YAML template spec + CLI expansion tests | Create template, apply to 20 files → all attrs/link rows present; state graph denies illegal transitions |
+| **Phase 8 — Lightweight Integrations**        | 2026-Q1                       | First “shell” GUIs                                    | • VS Code side-bar (read-only)<br>• **TUI v1** (tag tree ▸ file list ▸ preview) | • DP-009 TUI key-map & redraw budget<br>• Crate split `marlin_core`, `marlin_tui`                                                      | TUI binary ≤ 2.0 MB; 10 k row scroll ≤ 4 ms redraw                                                                             |                                                                                     |                                                                                            |                                                                                                          |
+| **Phase 9 — Dolphin Sidebar (MVP)**           | 2026-Q1                       | Peek metadata in KDE file-manager                     | • Qt-plugin showing tags, attrs, links                                          | • DP-010 DB/IP bridge (D-Bus vs UNIX socket)<br>• CMake packaging script                                                               | Sidebar opens in ≤ 150 ms; passes KDE lint                                                                                     |                                                                                     |                                                                                            |                                                                                                          |
+| **Phase 10 — Full GUI & Multi-device Sync**   | 2026-Q2                       | Edit metadata visually, sync option                   | • Electron/Qt hybrid explorer UI<br>• Pick & integrate sync backend             | • DP-011 sync back-end trade-study<br>• UI e2e tests in Playwright                                                                     | Round-trip CRUD between two nodes in < 2 s; 25 GUI tests green                                                                 |                                                                                     |                                                                                            |                                                                                                          |
 
 ---
 
-## 3 Next Steps
+### 2 · Feature cross-matrix (quick look-ups)
 
-* **Sprint α kickoff:** break deliverables into stories, estimate, assign.
-* **Add roadmap as `docs/ROADMAP.md`** (this file).
-* Wire a **Checklist issue** on GitHub: one task per Δ bullet for instant tracking.
+| Capability                            | Sprint / Phase | CLI flag or GUI element            | Linked DP |
+| ------------------------------------- | -------------- | ---------------------------------- | --------- |
+| Relationship **templates**            | P7             | `template new`, `template apply`   | DP-008    |
+| Positive / negative filter combinator | P6             | DSL `+tag:foo -tag:bar date>=2025` | DP-007    |
+| Dirty-scan optimisation               | E1             | `scan --dirty`                     | DP-002    |
+| Watch-mode                            | E2             | `marlin watch .`                   | DP-003    |
+| Grep snippets                         | P3             | `search -C3 "foo"`                 | DP-004    |
+| Hash / dedupe                         | P4             | `scan --rehash`                    | DP-005    |
 
 ---
 
-*Last updated · 2025-05-16*
+## 3 · Milestone acceptance checklist
+
+Before a milestone is declared “shipped”:
+
+* [ ] **Spec** merged (DP-xxx) with schema diff & example ASCII-cast
+* [ ] **Unit & integration tests** ≥ 85 % coverage on changed lines
+* [ ] **Perf guard-rail** script passes on CI matrix (Ubuntu 22, macOS 14)
+* [ ] **Docs** — CLI man-page, README table row, roadmap ticked
+* [ ] **Demo** uploaded to `docs/demos/` and linked in release notes
+* [ ] **Release tag** pushed; Cargo binary on GitHub Releases
+
+---
+
+### 4 · Next immediate actions
+
+1. **Write DP-001 (Schema v1.1)** — owner @alice, due 21 May
+2. **Set up Tarpaulin & Hyperfine jobs** — @bob, due 23 May
+3. **Spike dirty-flag logic** — @carol 2 days time-box, outcome in DP-002
+
+---
+
+> *This roadmap now contains both product-level “what” and engineering-level “how/when/prove it”.  It should allow a new contributor to jump in, pick the matching DP, and know exactly the bar they must clear for their code to merge.*
