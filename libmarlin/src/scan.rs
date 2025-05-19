@@ -1,4 +1,5 @@
-// src/scan.rs  (unchanged except tiny doc tweak)
+// src/scan.rs
+
 use std::fs;
 use std::path::Path;
 
@@ -27,14 +28,22 @@ pub fn scan_directory(conn: &mut Connection, root: &Path) -> Result<usize> {
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
     {
-        let meta = fs::metadata(entry.path())?;
+        let path = entry.path();
+        // Skip the database file and its WAL/SHM siblings
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.ends_with(".db") || name.ends_with("-wal") || name.ends_with("-shm") {
+                continue;
+            }
+        }
+
+        let meta = fs::metadata(path)?;
         let size = meta.len() as i64;
         let mtime = meta
             .modified()?
             .duration_since(std::time::UNIX_EPOCH)?
             .as_secs() as i64;
 
-        let path_str = entry.path().to_string_lossy();
+        let path_str = path.to_string_lossy();
         stmt.execute(params![path_str, size, mtime])?;
         count += 1;
         debug!(file = %path_str, "indexed");

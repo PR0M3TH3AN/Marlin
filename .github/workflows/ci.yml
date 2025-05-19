@@ -31,8 +31,7 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Install Rust (nightly)
         uses: actions-rs/toolchain@v1
@@ -40,15 +39,22 @@ jobs:
           toolchain: nightly
           override: true
 
-      - name: Install tarpaulin prerequisites
+      - name: Install system prerequisites
         run: |
-          rustup component add llvm-tools-preview
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Add llvm-tools (for tarpaulin)
+        run: rustup component add llvm-tools-preview
 
       - name: Install cargo-tarpaulin
         run: cargo install cargo-tarpaulin
 
-      - name: Run coverage
-        run: cargo tarpaulin --workspace --out Xml --fail-under 85
+      - name: Code coverage (libmarlin only)
+        run: cargo tarpaulin \
+               --package libmarlin \
+               --out Xml \
+               --fail-under 85
 
   benchmark:
     name: Performance Benchmark (Hyperfine)

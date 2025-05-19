@@ -48,7 +48,7 @@ pub fn open<P: AsRef<Path>>(db_path: P) -> Result<Connection> {
 
 /* ─── migration runner ────────────────────────────────────────────── */
 
-fn apply_migrations(conn: &mut Connection) -> Result<()> {
+pub(crate) fn apply_migrations(conn: &mut Connection) -> Result<()> {
     // Ensure schema_version bookkeeping table exists
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_version (
