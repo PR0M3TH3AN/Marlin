@@ -50,11 +50,8 @@ jobs:
       - name: Install cargo-tarpaulin
         run: cargo install cargo-tarpaulin
 
-      - name: Code coverage (libmarlin only)
-        run: cargo tarpaulin \
-               --package libmarlin \
-               --out Xml \
-               --fail-under 85
+      - name: Code Coverage (libmarlin only)
+        run: cargo +nightly tarpaulin --package libmarlin --out Xml --fail-under 85
 
   benchmark:
     name: Performance Benchmark (Hyperfine)
