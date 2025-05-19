@@ -1,4 +1,5 @@
 // src/cli.rs
+
 pub mod link;
 pub mod coll;
 pub mod view;
@@ -42,6 +43,10 @@ pub enum Commands {
 
     /// Scan one or more directories and populate the file index
     Scan {
+        /// Only re-index files marked dirty by `marlin watch`
+        #[arg(long)]
+        dirty: bool,
+
         /// Directories to scan (defaults to cwd)
         paths: Vec<std::path::PathBuf>,
     },

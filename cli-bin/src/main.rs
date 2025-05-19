@@ -16,6 +16,7 @@ use libmarlin::{
     scan,
     utils::determine_scan_root,
 };
+use libmarlin::db::take_dirty;
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
@@ -83,13 +84,31 @@ fn main() -> Result<()> {
         }
 
         /* ---- scan ------------------------------------------------ */
-        Commands::Scan { paths } => {
-            let scan_paths = if paths.is_empty() {
+        Commands::Scan { dirty, paths } => {
+            // Determine full-scan roots
+            let scan_paths: Vec<std::path::PathBuf> = if paths.is_empty() {
                 vec![env::current_dir()?]
-            } else { paths };
+            } else {
+                paths.into_iter().collect()
+            };
 
-            for p in scan_paths {
-                scan::scan_directory(&mut conn, &p)?;
+            if dirty {
+                // Incremental: only re-index the files marked dirty
+                let dirty_ids = take_dirty(&conn)?;
+                for id in dirty_ids {
+                    // look up each path by its file_id
+                    let path: String = conn.query_row(
+                        "SELECT path FROM files WHERE id = ?1",
+                        [id],
+                        |r| r.get(0),
+                    )?;
+                    scan::scan_directory(&mut conn, Path::new(&path))?;
+                }
+            } else {
+                // Full rescan of the given directories
+                for p in scan_paths {
+                    scan::scan_directory(&mut conn, &p)?;
+                }
             }
         }
 
