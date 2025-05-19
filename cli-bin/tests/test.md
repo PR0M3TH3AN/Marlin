@@ -65,4 +65,10 @@ sudo install -Dm755 target/release/marlin /usr/local/bin/marlin &&
 cargo test --all -- --nocapture
 ```
 
+or
+
+```bash
+./run_all_tests.sh
+```
+
 Stick that in a shell alias (`alias marlin-ci='…'`) and you’ve got a 5-second upgrade-and-verify loop.

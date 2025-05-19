@@ -154,6 +154,7 @@ fn main() -> Result<()> {
         Commands::Annotate(a_cmd)  => cli::annotate::run(&a_cmd,  &mut conn, args.format)?,
         Commands::Version(v_cmd)   => cli::version::run(&v_cmd,   &mut conn, args.format)?,
         Commands::Event(e_cmd)     => cli::event::run(&e_cmd,     &mut conn, args.format)?,
+        Commands::Watch(watch_cmd) => cli::watch::run(&watch_cmd, &mut conn, args.format)?,
     }
 
     Ok(())

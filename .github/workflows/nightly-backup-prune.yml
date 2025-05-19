@@ -1,0 +1,90 @@
+name: Nightly Backup Pruning
+
+on:
+  schedule:
+    # Run at 2:30 AM UTC every day
+    - cron: '30 2 * * *'
+  
+  # Allow manual triggering for testing purposes
+  workflow_dispatch:
+    inputs:
+      keep_count:
+        description: 'Number of backups to keep'
+        required: true
+        default: '7'
+        type: number
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prune-backups:
+    name: Prune Old Backups
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+      
+      - name: Build Marlin CLI
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --bin marlin
+      
+      - name: Configure backup location
+        id: config
+        run: |
+          BACKUP_DIR="${{ github.workspace }}/backups"
+          mkdir -p "$BACKUP_DIR"
+          echo "BACKUP_DIR=$BACKUP_DIR" >> $GITHUB_ENV
+      
+      - name: Create new backup
+        run: |
+          ./target/release/marlin backup --dir "$BACKUP_DIR"
+      
+      - name: Prune old backups
+        run: |
+          # Use manual input if provided, otherwise default to 7
+          KEEP_COUNT=${{ github.event.inputs.keep_count || 7 }}
+          echo "Pruning backups, keeping the $KEEP_COUNT most recent"
+          
+          ./target/release/marlin backup --prune $KEEP_COUNT --dir "$BACKUP_DIR"
+      
+      - name: Verify backups
+        run: |
+          # Verify the remaining backups are valid
+          echo "Verifying backups..."
+          BACKUPS_COUNT=$(find "$BACKUP_DIR" -name "bak_*" | wc -l)
+          echo "Found $BACKUPS_COUNT backups after pruning"
+          
+          # Basic validation - ensure we didn't lose any backups we wanted to keep
+          KEEP_COUNT=${{ github.event.inputs.keep_count || 7 }}
+          if [ $BACKUPS_COUNT -gt $KEEP_COUNT ]; then
+            echo "Warning: Found more backups ($BACKUPS_COUNT) than expected ($KEEP_COUNT)"
+            exit 1
+          elif [ $BACKUPS_COUNT -lt $KEEP_COUNT ]; then
+            # This might be normal if we haven't accumulated enough backups yet
+            echo "Note: Found fewer backups ($BACKUPS_COUNT) than limit ($KEEP_COUNT)"
+            echo "This is expected if the repository hasn't accumulated enough daily backups yet"
+          else
+            echo "Backup count matches expected value: $BACKUPS_COUNT"
+          fi
+          
+          # Run the Marlin backup verify command on each backup
+          for backup in $(find "$BACKUP_DIR" -name "bak_*" | sort); do
+            echo "Verifying: $(basename $backup)"
+            if ! ./target/release/marlin backup --verify --file "$backup"; then
+              echo "Error: Backup verification failed for $(basename $backup)"
+              exit 1
+            fi
+          done
+          
+          echo "All backups verified successfully"

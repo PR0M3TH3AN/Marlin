@@ -1,6 +1,9 @@
 //! Central DB helper – connection bootstrap, migrations **and** most
 //! data-access helpers (tags, links, collections, saved views, …).
 
+mod database;
+pub use database::{Database, IndexOptions};
+
 use std::{
     fs,
     path::{Path, PathBuf},

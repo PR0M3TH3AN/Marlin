@@ -9,6 +9,7 @@ pub mod remind;
 pub mod annotate;
 pub mod version;
 pub mod event;
+pub mod watch;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
@@ -123,6 +124,10 @@ pub enum Commands {
     /// Calendar events & timelines
     #[command(subcommand)]
     Event(event::EventCmd),
+
+    /// Watch directories for changes
+    #[command(subcommand)]
+    Watch(watch::WatchCmd),
 }
 
 #[derive(Subcommand, Debug)]
