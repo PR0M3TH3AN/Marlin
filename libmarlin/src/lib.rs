@@ -7,21 +7,30 @@
 
 #![deny(warnings)]
 
-pub mod config;   // moved as-is
-pub mod db;       // moved as-is
+pub mod config;   // as-is
+pub mod db;       // as-is
 pub mod logging;  // expose the logging init helper
-pub mod scan;     // moved as-is
+pub mod scan;     // as-is
 pub mod utils;    // hosts determine_scan_root() & misc helpers
+
+#[cfg(test)]
+mod utils_tests;
+#[cfg(test)]
+mod config_tests;
+#[cfg(test)]
+mod scan_tests;
+#[cfg(test)]
+mod logging_tests;
+#[cfg(test)]
+mod db_tests;
+#[cfg(test)]
+mod facade_tests;
 
 use anyhow::{Context, Result};
 use rusqlite::Connection;
-use std::path::Path;
-use walkdir::WalkDir;
+use std::{fs, path::Path};
 
-/// Primary façade – open a workspace then call helper methods.
-///
-/// Most methods simply wrap what the CLI used to do directly; more will be
-/// filled in sprint-by-sprint.
+/// Main handle for interacting with a Marlin database.
 pub struct Marlin {
     #[allow(dead_code)]
     cfg:  config::Config,
@@ -29,94 +38,165 @@ pub struct Marlin {
 }
 
 impl Marlin {
-    /// Load configuration from env / workspace and open (or create) the DB.
+    /// Open using the default config (env override or XDG/CWD fallback),
+    /// ensuring parent directories exist and applying migrations.
     pub fn open_default() -> Result<Self> {
-        let cfg  = config::Config::load()?;
-        let conn = db::open(&cfg.db_path)?;
-        Ok(Self { cfg, conn })
+        // 1) Load configuration (checks MARLIN_DB_PATH, XDG_DATA_HOME, or falls back to ./index_<hash>.db)
+        let cfg = config::Config::load()?;
+        // 2) Ensure the DB's parent directory exists
+        if let Some(parent) = cfg.db_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        // 3) Open the database and run migrations
+        let conn = db::open(&cfg.db_path)
+            .context(format!("opening database at {}", cfg.db_path.display()))?;
+        Ok(Marlin { cfg, conn })
     }
 
-    /// Open an explicit DB path – handy for tests or headless tools.
-    pub fn open_at<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let cfg  = config::Config { db_path: path.as_ref().to_path_buf() };
-        let conn = db::open(&cfg.db_path)?;
-        Ok(Self { cfg, conn })
+    /// Open a Marlin instance at the specified database path,
+    /// creating parent directories and applying migrations.
+    pub fn open_at<P: AsRef<Path>>(db_path: P) -> Result<Self> {
+        let db_path = db_path.as_ref();
+        // Ensure the specified DB directory exists
+        if let Some(parent) = db_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        // Build a minimal Config so callers can still inspect cfg.db_path
+        let cfg = config::Config { db_path: db_path.to_path_buf() };
+        // Open the database and run migrations
+        let conn = db::open(db_path)
+            .context(format!("opening database at {}", db_path.display()))?;
+        Ok(Marlin { cfg, conn })
     }
 
     /// Recursively index one or more directories.
     pub fn scan<P: AsRef<Path>>(&mut self, paths: &[P]) -> Result<usize> {
-        let mut total = 0usize;
+        let mut total = 0;
         for p in paths {
             total += scan::scan_directory(&mut self.conn, p.as_ref())?;
         }
         Ok(total)
     }
 
-    /// Attach a hierarchical tag (`foo/bar`) to every file that matches the
-    /// glob pattern. Returns the number of files that actually got updated.
+    /// Attach a hierarchical tag (`foo/bar`) to every _indexed_ file
+    /// matching the glob.  Returns the number of files actually updated.
     pub fn tag(&mut self, pattern: &str, tag_path: &str) -> Result<usize> {
         use glob::Pattern;
 
-        // 1) ensure tag hierarchy exists
-        let leaf_tag_id = db::ensure_tag_path(&self.conn, tag_path)?;
+        // 1) ensure tag hierarchy
+        let leaf = db::ensure_tag_path(&self.conn, tag_path)?;
 
-        // 2) collect leaf + ancestors
+        // 2) collect it plus all ancestors
         let mut tag_ids = Vec::new();
-        let mut current = Some(leaf_tag_id);
-        while let Some(id) = current {
+        let mut cur = Some(leaf);
+        while let Some(id) = cur {
             tag_ids.push(id);
-            current = self.conn.query_row(
-                "SELECT parent_id FROM tags WHERE id=?1",
+            cur = self.conn.query_row(
+                "SELECT parent_id FROM tags WHERE id = ?1",
                 [id],
                 |r| r.get::<_, Option<i64>>(0),
             )?;
         }
 
-        // 3) walk the file tree and upsert `file_tags`
+        // 3) pick matching files _from the DB_ (not from the FS!)
         let expanded = shellexpand::tilde(pattern).into_owned();
-        let pat      = Pattern::new(&expanded)
-            .with_context(|| format!("Invalid glob pattern `{expanded}`"))?;
-        let root     = utils::determine_scan_root(&expanded);
+        let pat = Pattern::new(&expanded)
+            .with_context(|| format!("Invalid glob pattern `{}`", expanded))?;
 
-        let mut stmt_file   = self.conn.prepare("SELECT id FROM files WHERE path=?1")?;
+        // pull down all (id, path)
+        let mut stmt_all = self.conn.prepare("SELECT id, path FROM files")?;
+        let rows = stmt_all.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+
         let mut stmt_insert = self.conn.prepare(
             "INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)",
         )?;
 
-        let mut changed = 0usize;
-        for entry in WalkDir::new(&root)
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter(|e| e.file_type().is_file())
-        {
-            let p = entry.path().to_string_lossy();
-            if !pat.matches(&p) { continue; }
+        let mut changed = 0;
+        for row in rows {
+            let (fid, path_str): (i64, String) = row?;
+            let matches = if expanded.contains(std::path::MAIN_SEPARATOR) {
+                // pattern includes a slash — match full path
+                pat.matches(&path_str)
+            } else {
+                // no slash — match just the file name
+                std::path::Path::new(&path_str)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| pat.matches(n))
+                    .unwrap_or(false)
+            };
+            if !matches {
+                continue;
+            }
 
-            match stmt_file.query_row([p.as_ref()], |r| r.get::<_, i64>(0)) {
-                Ok(fid) => {
-                    let mut newly = false;
-                    for &tid in &tag_ids {
-                        if stmt_insert.execute([fid, tid])? > 0 { newly = true; }
-                    }
-                    if newly { changed += 1; }
+            // upsert this tag + its ancestors
+            let mut newly = false;
+            for &tid in &tag_ids {
+                if stmt_insert.execute([fid, tid])? > 0 {
+                    newly = true;
                 }
-                Err(_) => { /* ignore non‐indexed files */ }
+            }
+            if newly {
+                changed += 1;
             }
         }
 
         Ok(changed)
     }
 
-    /// FTS5 search → list of matching paths.
+    /// Full‐text search over path, tags, and attrs (with fallback).
     pub fn search(&self, query: &str) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare(
-            "SELECT path FROM files_fts WHERE files_fts MATCH ?1 ORDER BY rank",
+            r#"
+            SELECT f.path
+              FROM files_fts
+              JOIN files f ON f.rowid = files_fts.rowid
+             WHERE files_fts MATCH ?1
+             ORDER BY rank
+            "#,
         )?;
-        let rows = stmt.query_map([query], |r| r.get::<_, String>(0))?
-                       .collect::<Result<Vec<_>, _>>()?;
-        Ok(rows)
+        let mut hits = stmt
+            .query_map([query], |r| r.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // graceful fallback: substring scan when no FTS hits and no `:` in query
+        if hits.is_empty() && !query.contains(':') {
+            hits = self.fallback_search(query)?;
+        }
+
+        Ok(hits)
+    }
+
+    /// private helper: scan `files` table + small files for a substring
+    fn fallback_search(&self, term: &str) -> Result<Vec<String>> {
+        let needle = term.to_lowercase();
+        let mut stmt = self.conn.prepare("SELECT path FROM files")?;
+        let rows = stmt.query_map([], |r| r.get(0))?;
+
+        let mut out = Vec::new();
+        for path_res in rows {
+            let p: String = path_res?;  // Explicit type annotation added
+            // match in the path itself?
+            if p.to_lowercase().contains(&needle) {
+                out.push(p.clone());
+                continue;
+            }
+            // otherwise read small files
+            if let Ok(meta) = fs::metadata(&p) {
+                if meta.len() <= 65_536 {
+                    if let Ok(body) = fs::read_to_string(&p) {
+                        if body.to_lowercase().contains(&needle) {
+                            out.push(p.clone());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(out)
     }
 
     /// Borrow the underlying SQLite connection (read-only).
-    pub fn conn(&self) -> &Connection { &self.conn }
+    pub fn conn(&self) -> &Connection {
+        &self.conn
+    }
 }

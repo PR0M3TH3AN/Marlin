@@ -452,6 +452,7 @@ dependencies = [
  "serde_json",
  "shellexpand",
  "shlex",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
  "walkdir",
