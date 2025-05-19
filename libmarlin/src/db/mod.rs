@@ -15,7 +15,7 @@ use rusqlite::{
     Connection,
     OpenFlags,
     OptionalExtension,
-    TransactionBehavior,  
+    TransactionBehavior,
 };
 use tracing::{debug, info, warn};
 
@@ -26,6 +26,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ("0002_update_fts_and_triggers.sql", include_str!("migrations/0002_update_fts_and_triggers.sql")),
     ("0003_create_links_collections_views.sql", include_str!("migrations/0003_create_links_collections_views.sql")),
     ("0004_fix_hierarchical_tags_fts.sql", include_str!("migrations/0004_fix_hierarchical_tags_fts.sql")),
+    ("0005_add_dirty_table.sql", include_str!("migrations/0005_add_dirty_table.sql")),
 ];
 
 /* ─── connection bootstrap ────────────────────────────────────────── */
@@ -39,12 +40,11 @@ pub fn open<P: AsRef<Path>>(db_path: P) -> Result<Connection> {
     conn.pragma_update(None, "foreign_keys", "ON")?;
 
     // Wait up to 30 s for a competing writer before giving up
-    conn.busy_timeout(std::time::Duration::from_secs(30))?;   // ← tweaked
+    conn.busy_timeout(std::time::Duration::from_secs(30))?;
 
     apply_migrations(&mut conn)?;
     Ok(conn)
 }
-
 
 /* ─── migration runner ────────────────────────────────────────────── */
 
@@ -85,7 +85,7 @@ pub(crate) fn apply_migrations(conn: &mut Connection) -> Result<()> {
 
         info!("applying migration {}", fname);
         tx.execute_batch(sql)
-            .with_context(|| format!("could not apply migration {fname}"))?;
+            .with_context(|| format!("could not apply migration {}", fname))?;
 
         tx.execute(
             "INSERT INTO schema_version (version, applied_on) VALUES (?1, ?2)",
@@ -158,7 +158,12 @@ pub fn upsert_attr(conn: &Connection, file_id: i64, key: &str, value: &str) -> R
 
 /* ─── links ───────────────────────────────────────────────────────── */
 
-pub fn add_link(conn: &Connection, src_file_id: i64, dst_file_id: i64, link_type: Option<&str>) -> Result<()> {
+pub fn add_link(
+    conn: &Connection,
+    src_file_id: i64,
+    dst_file_id: i64,
+    link_type: Option<&str>,
+) -> Result<()> {
     conn.execute(
         "INSERT INTO links(src_file_id, dst_file_id, type)
          VALUES (?1, ?2, ?3)
@@ -168,7 +173,12 @@ pub fn add_link(conn: &Connection, src_file_id: i64, dst_file_id: i64, link_type
     Ok(())
 }
 
-pub fn remove_link(conn: &Connection, src_file_id: i64, dst_file_id: i64, link_type: Option<&str>) -> Result<()> {
+pub fn remove_link(
+    conn: &Connection,
+    src_file_id: i64,
+    dst_file_id: i64,
+    link_type: Option<&str>,
+) -> Result<()> {
     conn.execute(
         "DELETE FROM links
          WHERE src_file_id = ?1
@@ -190,8 +200,10 @@ pub fn list_links(
     // Files matching pattern
     let mut stmt = conn.prepare("SELECT id, path FROM files WHERE path LIKE ?1")?;
     let rows = stmt
-        .query_map(params![like_pattern], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))?
-        .collect::<Result<Vec<_>, _>>()?;
+        .query_map(params![like_pattern], |r| {
+            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+        })?
+        .collect::<StdResult<Vec<_>, _>>()?;
 
     let mut out = Vec::new();
     for (fid, fpath) in rows {
@@ -210,8 +222,10 @@ pub fn list_links(
 
         let mut stmt2 = conn.prepare(&sql)?;
         let links = stmt2
-            .query_map(params![fid, link_type], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?;
+            .query_map(params![fid, link_type], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+            })?
+            .collect::<StdResult<Vec<_>, _>>()?;
 
         for (other, typ) in links {
             out.push((fpath.clone(), other, typ));
@@ -238,11 +252,11 @@ pub fn find_backlinks(
         Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
     })?;
 
-    let out = rows.collect::<StdResult<Vec<_>, _>>()?;   // rusqlite → anyhow via `?`
+    let out = rows.collect::<StdResult<Vec<_>, _>>()?;
     Ok(out)
 }
 
-/* ─── NEW: collections helpers ────────────────────────────────────── */
+/* ─── collections helpers ────────────────────────────────────────── */
 
 pub fn ensure_collection(conn: &Connection, name: &str) -> Result<i64> {
     conn.execute(
@@ -281,7 +295,7 @@ pub fn list_collection(conn: &Connection, name: &str) -> Result<Vec<String>> {
     Ok(list)
 }
 
-/* ─── NEW: saved views (smart folders) ────────────────────────────── */
+/* ─── saved views (smart folders) ───────────────────────────────── */
 
 pub fn save_view(conn: &Connection, name: &str, query: &str) -> Result<()> {
     conn.execute(
@@ -295,7 +309,6 @@ pub fn save_view(conn: &Connection, name: &str, query: &str) -> Result<()> {
 
 pub fn list_views(conn: &Connection) -> Result<Vec<(String, String)>> {
     let mut stmt = conn.prepare("SELECT name, query FROM views ORDER BY name")?;
-
     let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
     let list = rows.collect::<StdResult<Vec<_>, _>>()?;
     Ok(list)
@@ -307,7 +320,32 @@ pub fn view_query(conn: &Connection, name: &str) -> Result<String> {
         [name],
         |r| r.get::<_, String>(0),
     )
-    .context(format!("no view called '{name}'"))
+    .context(format!("no view called '{}'", name))
+}
+
+/* ─── dirty‐scan helpers ─────────────────────────────────────────── */
+
+/// Mark a file as “dirty” so it’ll be picked up by `scan_dirty`.
+pub fn mark_dirty(conn: &Connection, file_id: i64) -> Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO file_changes(file_id, marked_at)
+         VALUES (?1, strftime('%s','now'))",
+        params![file_id],
+    )?;
+    Ok(())
+}
+
+/// Take and clear all dirty file IDs for incremental re-scan.
+pub fn take_dirty(conn: &Connection) -> Result<Vec<i64>> {
+    let mut ids = Vec::new();
+    {
+        let mut stmt = conn.prepare("SELECT file_id FROM file_changes")?;
+        for row in stmt.query_map([], |r| r.get(0))? {
+            ids.push(row?);
+        }
+    }
+    conn.execute("DELETE FROM file_changes", [])?;
+    Ok(ids)
 }
 
 /* ─── backup / restore helpers ────────────────────────────────────── */

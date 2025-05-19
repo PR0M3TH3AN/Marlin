@@ -38,6 +38,10 @@ test.db
 .env.*
 
 
-# === Other ===
+# === Other Files ===
 repo-context.txt
 saved_config.yaml
+
+# === Other Dirs ===
+/bench/corpus
+/bench/backups
