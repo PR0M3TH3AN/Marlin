@@ -23,7 +23,6 @@ pub struct PruneResult {
     pub removed: Vec<BackupInfo>,
 }
 
-// FIX 2: Add derive(Debug) here
 #[derive(Debug)]
 pub struct BackupManager {
     live_db_path: PathBuf,
@@ -226,8 +225,6 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
     use crate::db::open as open_marlin_db;
-    // FIX 1: Remove unused import std::io::ErrorKind
-    // use std::io::ErrorKind; 
 
     fn create_valid_live_db(path: &Path) -> rusqlite::Connection {
         let conn = open_marlin_db(path)
@@ -385,7 +382,6 @@ mod tests {
         
         let initial_value = "initial_data_for_restore";
         {
-            // FIX 3: Remove `mut` from conn here
             let conn = create_valid_live_db(&live_db_path);
             conn.execute("DELETE FROM test_table", []).unwrap(); 
             conn.execute("INSERT INTO test_table (data) VALUES (?1)", [initial_value]).unwrap();
@@ -398,8 +394,7 @@ mod tests {
 
         let modified_value = "modified_data_for_restore";
         {
-            // FIX 3: Remove `mut` from conn here
-            let conn = rusqlite::Connection::open(&live_db_path) 
+            let conn = rusqlite::Connection::open(&live_db_path)
                 .expect("Failed to open live DB for modification");
             conn.execute("UPDATE test_table SET data = ?1", [modified_value])
                 .expect("Failed to update data");
