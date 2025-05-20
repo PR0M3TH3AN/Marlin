@@ -45,3 +45,10 @@ saved_config.yaml
 # === Other Dirs ===
 /bench/corpus
 /bench/backups
+
+# === Coverage reports ===
+cobertura.xml
+tarpaulin-report.html
+
+# === Generated docs ===
+docs/cli_cheatsheet.md
