@@ -82,7 +82,7 @@ echo "Results written to bench/dirty-vs-full.md"
 #   slower full-scan is relative to dirty-scan (baseline = 1.00).
 SPEEDUP=$(grep '\`full-scan\`' bench/dirty-vs-full.md \
          | awk -F'|' '{print $5}' \
-         | xargs)
+         | xargs || echo "N/A")
 
 echo
 echo "→ Summary:"
