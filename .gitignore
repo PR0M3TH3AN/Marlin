@@ -48,3 +48,7 @@ saved_config.yaml
 /target/
 /cobertura.xml
 /tarpaulin-report.html
+target/.rustc_info.json
+target/release/marlin
+target/release/marlin.d
+tarpaulin-report.html
