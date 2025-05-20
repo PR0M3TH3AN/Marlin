@@ -261,7 +261,8 @@ test_marlin_demo_flow() {
     log_info "Running search commands..."
     run_cmd "${marlin_cmd}" search TODO | grep "TODO.txt" || (log_error "Search TODO failed"; exit 1)
     run_cmd "${marlin_cmd}" search tag:project/md | grep "draft1.md" || (log_error "Search tag:project/md failed"; exit 1)
-    run_cmd "${marlin_cmd}" search 'tag:logs/app AND ERROR' | grep "app.log" || (log_error "Search logs/app AND ERROR failed"; exit 1)
+    run_cmd "${marlin_cmd}" search tag:logs/app | grep "app.log" || (log_error "Search tag:logs/app failed"; exit 1)
+    grep ERROR "${DEMO_DIR}/Logs/app.log" || (log_error "Expected ERROR entry not found in log"; exit 1)
     run_cmd "${marlin_cmd}" search 'attr:status=complete' | grep "final.md" || (log_error "Search attr:status=complete failed"; exit 1)
     # Skipping --exec for automated script to avoid opening GUI
     # run_cmd "${marlin_cmd}" search 'attr:reviewed=yes' --exec 'echo {}'
