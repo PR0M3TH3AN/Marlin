@@ -11,6 +11,17 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tracing::info;
 
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+#[allow(dead_code)]
+static LAST_WATCHER_STATE: Lazy<Mutex<Option<WatcherState>>> = Lazy::new(|| Mutex::new(None));
+
+#[allow(dead_code)]
+pub fn last_watcher_state() -> Option<WatcherState> {
+    LAST_WATCHER_STATE.lock().unwrap().clone()
+}
+
 /// Commands related to file watching functionality
 #[derive(Subcommand, Debug)]
 pub enum WatchCmd {
@@ -84,7 +95,11 @@ pub fn run(cmd: &WatchCmd, _conn: &mut Connection, _format: super::Format) -> Re
             }
 
             info!("Watcher run loop ended. Explicitly stopping watcher instance...");
-            watcher.stop()?; 
+            watcher.stop()?;
+            {
+                let mut guard = LAST_WATCHER_STATE.lock().unwrap();
+                *guard = Some(watcher.status().state);
+            }
             info!("Watcher instance fully stopped.");
             Ok(())
         }
