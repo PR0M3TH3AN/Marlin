@@ -58,6 +58,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Upload CLI Cheatsheet
+        uses: actions/upload-artifact@v4
+        with:
+          name: marlin-cli-cheatsheet
+          path: docs/cli_cheatsheet.md
+          if-no-files-found: warn
+          retention-days: 7
+
   coverage:
     name: Code Coverage (Tarpaulin)
     needs: comprehensive-tests
