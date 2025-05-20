@@ -24,7 +24,11 @@ impl Config {
         // 1) explicit override
         if let Some(val) = std::env::var_os("MARLIN_DB_PATH") {
             let p = PathBuf::from(val);
-            std::fs::create_dir_all(p.parent().expect("has parent"))?;
+            if let Some(parent) = p.parent() {
+                if !parent.as_os_str().is_empty() {
+                    std::fs::create_dir_all(parent)?;
+                }
+            }
             return Ok(Self { db_path: p });
         }
 
