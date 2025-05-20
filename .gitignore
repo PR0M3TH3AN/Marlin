@@ -45,3 +45,6 @@ saved_config.yaml
 # === Other Dirs ===
 /bench/corpus
 /bench/backups
+/target/
+/cobertura.xml
+/tarpaulin-report.html

@@ -70,3 +70,9 @@ or
 ```bash
 ./run_all_tests.sh
 ```
+
+to see test coverage run:
+
+```bash
+cargo tarpaulin --out Html
+```
