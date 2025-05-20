@@ -38,7 +38,6 @@ use cli::{Cli, Commands};
 
 fn main() -> Result<()> {
     /* ── CLI parsing & logging ────────────────────────────────── */
-
     let args = Cli::parse();
     if args.verbose {
         env::set_var("RUST_LOG", "debug");
@@ -46,7 +45,6 @@ fn main() -> Result<()> {
     logging::init();
 
     /* ── shell-completion shortcut ────────────────────────────── */
-
     if let Commands::Completions { shell } = &args.command {
         let mut cmd = Cli::command();
         generate(*shell, &mut cmd, "marlin", &mut io::stdout());
@@ -54,7 +52,6 @@ fn main() -> Result<()> {
     }
 
     /* ── config & automatic backup ───────────────────────────── */
-
     let cfg = config::Config::load()?; // resolves DB path
 
     match &args.command {
@@ -66,11 +63,9 @@ fn main() -> Result<()> {
     }
 
     /* ── open DB (runs migrations) ───────────────────────────── */
-
     let mut conn = db::open(&cfg.db_path)?;
 
     /* ── command dispatch ────────────────────────────────────── */
-
     match args.command {
         Commands::Completions { .. } => {} // handled above
 
@@ -85,7 +80,6 @@ fn main() -> Result<()> {
 
         /* ---- scan ------------------------------------------------ */
         Commands::Scan { dirty, paths } => {
-            // Determine full-scan roots
             let scan_paths: Vec<std::path::PathBuf> = if paths.is_empty() {
                 vec![env::current_dir()?]
             } else {
@@ -93,10 +87,8 @@ fn main() -> Result<()> {
             };
 
             if dirty {
-                // Incremental: only re-index the files marked dirty
                 let dirty_ids = take_dirty(&conn)?;
                 for id in dirty_ids {
-                    // look up each path by its file_id
                     let path: String = conn.query_row(
                         "SELECT path FROM files WHERE id = ?1",
                         [id],
@@ -105,7 +97,6 @@ fn main() -> Result<()> {
                     scan::scan_directory(&mut conn, Path::new(&path))?;
                 }
             } else {
-                // Full rescan of the given directories
                 for p in scan_paths {
                     scan::scan_directory(&mut conn, &p)?;
                 }
@@ -133,7 +124,7 @@ fn main() -> Result<()> {
         }
 
         Commands::Restore { backup_path } => {
-            drop(conn); // close handle before overwrite
+            drop(conn);
             db::restore(&backup_path, &cfg.db_path).with_context(|| {
                 format!("Failed to restore DB from {}", backup_path.display())
             })?;
@@ -163,12 +154,8 @@ fn main() -> Result<()> {
 /* ─────────────────── helpers & sub-routines ─────────────────── */
 
 /* ---------- TAGS ---------- */
-
 fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Result<()> {
-    // ensure_tag_path returns ID of deepest node
     let leaf_tag_id = db::ensure_tag_path(conn, tag_path)?;
-
-    // collect leaf + ancestors
     let mut tag_ids = Vec::new();
     let mut current = Some(leaf_tag_id);
     while let Some(id) = current {
@@ -224,7 +211,6 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
 }
 
 /* ---------- ATTRIBUTES ---------- */
-
 fn attr_set(conn: &rusqlite::Connection, pattern: &str, key: &str, value: &str) -> Result<()> {
     let expanded = shellexpand::tilde(pattern).into_owned();
     let pat  = Pattern::new(&expanded)
@@ -274,9 +260,7 @@ fn attr_ls(conn: &rusqlite::Connection, path: &Path) -> Result<()> {
 }
 
 /* ---------- SEARCH ---------- */
-
 fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>) -> Result<()> {
-    /* ── build FTS expression -------------------------------- */
     let mut parts = Vec::new();
     let toks = shlex::split(raw_query).unwrap_or_else(|| vec![raw_query.to_string()]);
     for tok in toks {
@@ -304,7 +288,6 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
     let fts_expr = parts.join(" ");
     debug!("FTS MATCH expression: {fts_expr}");
 
-    /* ── primary FTS query ---------------------------------- */
     let mut stmt = conn.prepare(
         r#"
         SELECT f.path
@@ -319,12 +302,10 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
         .filter_map(Result::ok)
         .collect();
 
-    /* ── graceful fallback (substring scan) ----------------- */
     if hits.is_empty() && !raw_query.contains(':') {
         hits = naive_substring_search(conn, raw_query)?;
     }
 
-    /* ── output / exec -------------------------------------- */
     if let Some(cmd_tpl) = exec {
         run_exec(&hits, &cmd_tpl)?;
     } else {
@@ -339,7 +320,6 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
     Ok(())
 }
 
-/// Fallback: case-insensitive substring scan over paths *and* small file bodies.
 fn naive_substring_search(conn: &rusqlite::Connection, term: &str) -> Result<Vec<String>> {
     let needle = term.to_lowercase();
     let mut stmt = conn.prepare("SELECT path FROM files")?;
@@ -352,7 +332,6 @@ fn naive_substring_search(conn: &rusqlite::Connection, term: &str) -> Result<Vec
             out.push(p.clone());
             continue;
         }
-        // Only scan files ≤ 64 kB
         if let Ok(meta) = fs::metadata(&p) {
             if meta.len() > 65_536 { continue; }
         }
@@ -365,11 +344,9 @@ fn naive_substring_search(conn: &rusqlite::Connection, term: &str) -> Result<Vec
     Ok(out)
 }
 
-/// Run external command template on every hit (`{}` placeholder supported).
 fn run_exec(paths: &[String], cmd_tpl: &str) -> Result<()> {
     let mut ran_without_placeholder = false;
 
-    // optimisation: if no hits and no placeholder, run once
     if paths.is_empty() && !cmd_tpl.contains("{}") {
         if let Some(mut parts) = shlex::split(cmd_tpl) {
             if !parts.is_empty() {
@@ -404,12 +381,131 @@ fn run_exec(paths: &[String], cmd_tpl: &str) -> Result<()> {
     Ok(())
 }
 
-/* ---------- misc helpers ---------- */
-
 fn escape_fts(term: &str) -> String {
     if term.contains(|c: char| c.is_whitespace() || "-:()\"".contains(c))
         || ["AND", "OR", "NOT", "NEAR"].contains(&term.to_uppercase().as_str())
     {
         format!("\"{}\"", term.replace('"', "\"\""))
-    } else { term.to_string() }
+    } else {
+        term.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use assert_cmd::Command;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_help_command() {
+        let mut cmd = Command::cargo_bin("marlin").unwrap();
+        cmd.arg("--help");
+        cmd.assert()
+            .success()
+            .stdout(predicates::str::contains("Usage: marlin"));
+    }
+
+    #[test]
+    fn test_version_command() {
+        let mut cmd = Command::cargo_bin("marlin").unwrap();
+        cmd.arg("--version");
+        cmd.assert()
+            .success()
+            .stdout(predicates::str::contains("marlin-cli 0.1.0"));
+    }
+
+    #[test]
+    fn test_verbose_logging() {
+        let tmp = tempdir().unwrap();
+        let mut cmd = Command::cargo_bin("marlin").unwrap();
+        cmd.env("MARLIN_DB_PATH", tmp.path().join("index.db"));
+        cmd.arg("--verbose").arg("init");
+        let output = cmd.output().unwrap();
+        assert!(output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("DEBUG"),
+            "Expected debug logs in stderr, got: {}",
+            stderr
+        );
+    }
+
+    #[test]
+    fn test_shell_completions() {
+        let mut cmd = Command::cargo_bin("marlin").unwrap();
+        cmd.arg("completions").arg("bash");
+        cmd.assert()
+            .success()
+            .stdout(predicates::str::contains("_marlin()"))
+            .stdout(predicates::str::contains("init"))
+            .stdout(predicates::str::contains("scan"));
+    }
+
+    #[test]
+    fn test_invalid_subcommand() {
+        let mut cmd = Command::cargo_bin("marlin").unwrap();
+        cmd.arg("invalid_cmd");
+        cmd.assert()
+            .failure()
+            .stderr(predicates::str::contains("error: unrecognized subcommand"));
+    }
+
+    #[test]
+    fn test_init_command() {
+        let tmp = tempdir().unwrap();
+        let db_path = tmp.path().join("index.db");
+        let mut cmd = Command::cargo_bin("marlin").unwrap();
+        cmd.env("MARLIN_DB_PATH", &db_path);
+        cmd.arg("init");
+        cmd.assert().success();
+        assert!(db_path.exists(), "Database file should exist after init");
+    }
+
+    #[test]
+    fn test_automatic_backup() {
+        let tmp = tempdir().unwrap();
+        let db_path = tmp.path().join("index.db");
+        let backups_dir = tmp.path().join("backups");
+
+        // Init: no backup
+        let mut cmd_init = Command::cargo_bin("marlin").unwrap();
+        cmd_init.env("MARLIN_DB_PATH", &db_path);
+        cmd_init.arg("init");
+        cmd_init.assert().success();
+        assert!(
+            !backups_dir.exists() || backups_dir.read_dir().unwrap().next().is_none(),
+            "No backup should be created for init"
+        );
+
+        // Scan: backup created
+        let mut cmd_scan = Command::cargo_bin("marlin").unwrap();
+        cmd_scan.env("MARLIN_DB_PATH", &db_path);
+        cmd_scan.arg("scan");
+        cmd_scan.assert().success();
+        assert!(backups_dir.exists(), "Backups directory should exist after scan");
+        let backups: Vec<_> = backups_dir.read_dir().unwrap().collect();
+        assert_eq!(backups.len(), 1, "One backup should be created for scan");
+    }
+
+    #[test]
+    fn test_annotate_stub() {
+        let tmp = tempdir().unwrap();
+        let mut cmd = Command::cargo_bin("marlin").unwrap();
+        cmd.env("MARLIN_DB_PATH", tmp.path().join("index.db"));
+        cmd.arg("annotate").arg("add").arg("file.txt").arg("note");
+        cmd.assert()
+            .failure()
+            .stderr(predicates::str::contains("not yet implemented"));
+    }
+
+    #[test]
+    fn test_event_stub() {
+        let tmp = tempdir().unwrap();
+        let mut cmd = Command::cargo_bin("marlin").unwrap();
+        cmd.env("MARLIN_DB_PATH", tmp.path().join("index.db"));
+        cmd.arg("event").arg("add").arg("file.txt").arg("2025-05-20").arg("desc");
+        cmd.assert()
+            .failure()
+            .stderr(predicates::str::contains("not yet implemented"));
+    }
 }
