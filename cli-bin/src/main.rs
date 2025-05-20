@@ -395,6 +395,7 @@ fn escape_fts(term: &str) -> String {
 mod tests {
     use assert_cmd::Command;
     use tempfile::tempdir;
+    use super::{apply_tag, attr_set, naive_substring_search, run_exec, escape_fts};
 
     #[test]
     fn test_help_command() {
@@ -507,5 +508,74 @@ mod tests {
         cmd.assert()
             .failure()
             .stderr(predicates::str::contains("not yet implemented"));
+    }
+
+    fn open_mem() -> rusqlite::Connection {
+        libmarlin::db::open(":memory:").expect("open in-memory DB")
+    }
+
+    #[test]
+    fn test_tagging_and_attributes_update_db() {
+        use std::fs::File;
+        use libmarlin::scan::scan_directory;
+
+        let tmp = tempdir().unwrap();
+        let file_path = tmp.path().join("a.txt");
+        File::create(&file_path).unwrap();
+
+        let mut conn = open_mem();
+        scan_directory(&mut conn, tmp.path()).unwrap();
+
+        apply_tag(&conn, file_path.to_str().unwrap(), "foo/bar").unwrap();
+        attr_set(&conn, file_path.to_str().unwrap(), "k", "v").unwrap();
+
+        let tag: String = conn
+            .query_row(
+                "SELECT t.name FROM file_tags ft JOIN tags t ON t.id=ft.tag_id JOIN files f ON f.id=ft.file_id WHERE f.path=?1 AND t.name='bar'",
+                [file_path.to_str().unwrap()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(tag, "bar");
+
+        let val: String = conn
+            .query_row(
+                "SELECT value FROM attributes a JOIN files f ON f.id=a.file_id WHERE f.path=?1 AND a.key='k'",
+                [file_path.to_str().unwrap()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(val, "v");
+    }
+
+    #[test]
+    fn test_naive_search_and_run_exec() {
+        use std::fs;
+
+        let tmp = tempdir().unwrap();
+        let f1 = tmp.path().join("hello.txt");
+        fs::write(&f1, "hello world").unwrap();
+
+        let mut conn = open_mem();
+        libmarlin::scan::scan_directory(&mut conn, tmp.path()).unwrap();
+
+        let hits = naive_substring_search(&conn, "world").unwrap();
+        assert_eq!(hits, vec![f1.to_string_lossy().to_string()]);
+
+        let log = tmp.path().join("log.txt");
+        let script = tmp.path().join("log.sh");
+        fs::write(&script, "#!/bin/sh\necho $1 >> $LOGFILE\n").unwrap();
+        std::env::set_var("LOGFILE", &log);
+
+        run_exec(&[f1.to_string_lossy().to_string()], &format!("sh {} {{}}", script.display())).unwrap();
+        let logged = fs::read_to_string(&log).unwrap();
+        assert!(logged.contains("hello.txt"));
+    }
+
+    #[test]
+    fn test_escape_fts_quotes_terms() {
+        assert_eq!(escape_fts("foo"), "foo");
+        assert_eq!(escape_fts("foo bar"), "\"foo bar\"");
+        assert_eq!(escape_fts("AND"), "\"AND\"");
     }
 }
