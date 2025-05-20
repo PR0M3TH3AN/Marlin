@@ -286,6 +286,33 @@ mod event_debouncer_tests {
         assert!(flushed.is_empty());
         assert_eq!(debouncer.len(), 0);
     }
+
+    #[test]
+    fn debouncer_dir_then_file_hierarchical() {
+        let mut debouncer = EventDebouncer::new(100);
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let dir = temp_dir.path().to_path_buf();
+        let file = dir.join("child.txt");
+
+        debouncer.add_event(ProcessedEvent {
+            path: dir.clone(),
+            kind: EventKind::Create(CreateKind::Folder),
+            priority: EventPriority::Create,
+            timestamp: Instant::now(),
+        });
+        debouncer.add_event(ProcessedEvent {
+            path: file,
+            kind: EventKind::Create(CreateKind::File),
+            priority: EventPriority::Create,
+            timestamp: Instant::now(),
+        });
+
+        assert_eq!(debouncer.len(), 2);
+        std::thread::sleep(Duration::from_millis(110));
+        let flushed = debouncer.flush();
+        assert_eq!(flushed.len(), 2);
+        assert!(flushed.iter().any(|e| e.path == dir));
+    }
 }
 
 
