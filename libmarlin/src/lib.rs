@@ -17,23 +17,27 @@ pub mod utils;
 pub mod watcher;
 
 #[cfg(test)]
-mod utils_tests;
-#[cfg(test)]
 mod config_tests;
-#[cfg(test)]
-mod scan_tests;
-#[cfg(test)]
-mod logging_tests;
 #[cfg(test)]
 mod db_tests;
 #[cfg(test)]
 mod facade_tests;
 #[cfg(test)]
+mod logging_tests;
+#[cfg(test)]
+mod scan_tests;
+#[cfg(test)]
+mod utils_tests;
+#[cfg(test)]
 mod watcher_tests;
 
 use anyhow::{Context, Result};
 use rusqlite::Connection;
-use std::{fs, path::Path, sync::{Arc, Mutex}};
+use std::{
+    fs,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 /// Main handle for interacting with a Marlin database.
 pub struct Marlin {
@@ -66,10 +70,12 @@ impl Marlin {
             fs::create_dir_all(parent)?;
         }
         // Build a minimal Config so callers can still inspect cfg.db_path
-        let cfg = config::Config { db_path: db_path.to_path_buf() };
+        let cfg = config::Config {
+            db_path: db_path.to_path_buf(),
+        };
         // Open the database and run migrations
-        let conn = db::open(db_path)
-            .context(format!("opening database at {}", db_path.display()))?;
+        let conn =
+            db::open(db_path).context(format!("opening database at {}", db_path.display()))?;
         Ok(Marlin { cfg, conn })
     }
 
@@ -95,11 +101,11 @@ impl Marlin {
         let mut cur = Some(leaf);
         while let Some(id) = cur {
             tag_ids.push(id);
-            cur = self.conn.query_row(
-                "SELECT parent_id FROM tags WHERE id = ?1",
-                [id],
-                |r| r.get::<_, Option<i64>>(0),
-            )?;
+            cur = self
+                .conn
+                .query_row("SELECT parent_id FROM tags WHERE id = ?1", [id], |r| {
+                    r.get::<_, Option<i64>>(0)
+                })?;
         }
 
         // 3) match files by glob against stored paths
@@ -110,9 +116,9 @@ impl Marlin {
         let mut stmt_all = self.conn.prepare("SELECT id, path FROM files")?;
         let rows = stmt_all.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
 
-        let mut stmt_ins = self.conn.prepare(
-            "INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)",
-        )?;
+        let mut stmt_ins = self
+            .conn
+            .prepare("INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)")?;
 
         let mut changed = 0;
         for row in rows {
@@ -148,7 +154,8 @@ impl Marlin {
         let mut stmt = self.conn.prepare(
             "SELECT f.path FROM files_fts JOIN files f ON f.rowid = files_fts.rowid WHERE files_fts MATCH ?1 ORDER BY rank",
         )?;
-        let mut hits = stmt.query_map([query], |r| r.get(0))?
+        let mut hits = stmt
+            .query_map([query], |r| r.get(0))?
             .collect::<std::result::Result<Vec<_>, rusqlite::Error>>()?;
 
         if hits.is_empty() && !query.contains(':') {
@@ -169,7 +176,7 @@ impl Marlin {
                 continue;
             }
             if let Ok(meta) = fs::metadata(&p) {
-                if meta.len() <= 65_536 { 
+                if meta.len() <= 65_536 {
                     if let Ok(body) = fs::read_to_string(&p) {
                         if body.to_lowercase().contains(&needle) {
                             out.push(p.clone());
@@ -194,14 +201,13 @@ impl Marlin {
     ) -> Result<watcher::FileWatcher> {
         let cfg = config.unwrap_or_default();
         let p = path.as_ref().to_path_buf();
-        let new_conn = db::open(&self.cfg.db_path)
-            .context("opening database for watcher")?;
+        let new_conn = db::open(&self.cfg.db_path).context("opening database for watcher")?;
         let watcher_db = Arc::new(Mutex::new(db::Database::new(new_conn)));
-        
+
         let mut owned_w = watcher::FileWatcher::new(vec![p], cfg)?;
         owned_w.with_database(watcher_db)?; // Modifies owned_w in place
         owned_w.start()?; // Start the watcher after it has been fully configured
-        
+
         Ok(owned_w) // Return the owned FileWatcher
     }
 }

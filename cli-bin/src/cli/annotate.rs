@@ -1,11 +1,11 @@
 // src/cli/annotate.rs
-use clap::{Subcommand, Args};
-use rusqlite::Connection;
 use crate::cli::Format;
+use clap::{Args, Subcommand};
+use rusqlite::Connection;
 
 #[derive(Subcommand, Debug)]
 pub enum AnnotateCmd {
-    Add (ArgsAdd),
+    Add(ArgsAdd),
     List(ArgsList),
 }
 
@@ -13,16 +13,20 @@ pub enum AnnotateCmd {
 pub struct ArgsAdd {
     pub file: String,
     pub note: String,
-    #[arg(long)] pub range: Option<String>,
-    #[arg(long)] pub highlight: bool,
+    #[arg(long)]
+    pub range: Option<String>,
+    #[arg(long)]
+    pub highlight: bool,
 }
 
 #[derive(Args, Debug)]
-pub struct ArgsList { pub file_pattern: String }
+pub struct ArgsList {
+    pub file_pattern: String,
+}
 
 pub fn run(cmd: &AnnotateCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {
-        AnnotateCmd::Add(a)  => todo!("annotate add {:?}", a),
+        AnnotateCmd::Add(a) => todo!("annotate add {:?}", a),
         AnnotateCmd::List(a) => todo!("annotate list {:?}", a),
     }
 }

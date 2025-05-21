@@ -1,9 +1,9 @@
 // libmarlin/src/scan_tests.rs
 
-use super::scan::scan_directory;
 use super::db;
-use tempfile::tempdir;
+use super::scan::scan_directory;
 use std::fs::File;
+use tempfile::tempdir;
 
 #[test]
 fn scan_directory_counts_files() {

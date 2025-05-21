@@ -9,14 +9,8 @@
 mod cli; // sub-command definitions and argument structs
 
 /* ── shared modules re-exported from libmarlin ─────────────────── */
-use libmarlin::{
-    config,
-    db,
-    logging,
-    scan,
-    utils::determine_scan_root,
-};
 use libmarlin::db::take_dirty;
+use libmarlin::{config, db, logging, scan, utils::determine_scan_root};
 
 use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
@@ -24,13 +18,7 @@ use clap_complete::generate;
 use glob::Pattern;
 use shellexpand;
 use shlex;
-use std::{
-    env,
-    fs,
-    io,
-    path::Path,
-    process::Command,
-};
+use std::{env, fs, io, path::Path, process::Command};
 use tracing::{debug, error, info};
 use walkdir::WalkDir;
 
@@ -57,7 +45,7 @@ fn main() -> Result<()> {
     match &args.command {
         Commands::Init | Commands::Backup | Commands::Restore { .. } => {}
         _ => match db::backup(&cfg.db_path) {
-            Ok(p)  => info!("Pre-command auto-backup created at {}", p.display()),
+            Ok(p) => info!("Pre-command auto-backup created at {}", p.display()),
             Err(e) => error!("Failed to create pre-command auto-backup: {e}"),
         },
     }
@@ -72,9 +60,8 @@ fn main() -> Result<()> {
         /* ---- init ------------------------------------------------ */
         Commands::Init => {
             info!("Database initialised at {}", cfg.db_path.display());
-            let cwd   = env::current_dir().context("getting current directory")?;
-            let count = scan::scan_directory(&mut conn, &cwd)
-                .context("initial scan failed")?;
+            let cwd = env::current_dir().context("getting current directory")?;
+            let count = scan::scan_directory(&mut conn, &cwd).context("initial scan failed")?;
             info!("Initial scan complete – indexed/updated {count} files");
         }
 
@@ -89,11 +76,8 @@ fn main() -> Result<()> {
             if dirty {
                 let dirty_ids = take_dirty(&conn)?;
                 for id in dirty_ids {
-                    let path: String = conn.query_row(
-                        "SELECT path FROM files WHERE id = ?1",
-                        [id],
-                        |r| r.get(0),
-                    )?;
+                    let path: String =
+                        conn.query_row("SELECT path FROM files WHERE id = ?1", [id], |r| r.get(0))?;
                     scan::scan_directory(&mut conn, Path::new(&path))?;
                 }
             } else {
@@ -104,18 +88,18 @@ fn main() -> Result<()> {
         }
 
         /* ---- tag / attribute / search --------------------------- */
-        Commands::Tag { pattern, tag_path } =>
-            apply_tag(&conn, &pattern, &tag_path)?,
+        Commands::Tag { pattern, tag_path } => apply_tag(&conn, &pattern, &tag_path)?,
 
         Commands::Attr { action } => match action {
-            cli::AttrCmd::Set { pattern, key, value } =>
-                attr_set(&conn, &pattern, &key, &value)?,
-            cli::AttrCmd::Ls { path } =>
-                attr_ls(&conn, &path)?,
+            cli::AttrCmd::Set {
+                pattern,
+                key,
+                value,
+            } => attr_set(&conn, &pattern, &key, &value)?,
+            cli::AttrCmd::Ls { path } => attr_ls(&conn, &path)?,
         },
 
-        Commands::Search { query, exec } =>
-            run_search(&conn, &query, exec)?,
+        Commands::Search { query, exec } => run_search(&conn, &query, exec)?,
 
         /* ---- maintenance ---------------------------------------- */
         Commands::Backup => {
@@ -125,9 +109,8 @@ fn main() -> Result<()> {
 
         Commands::Restore { backup_path } => {
             drop(conn);
-            db::restore(&backup_path, &cfg.db_path).with_context(|| {
-                format!("Failed to restore DB from {}", backup_path.display())
-            })?;
+            db::restore(&backup_path, &cfg.db_path)
+                .with_context(|| format!("Failed to restore DB from {}", backup_path.display()))?;
             println!("Restored DB from {}", backup_path.display());
             db::open(&cfg.db_path).with_context(|| {
                 format!("Could not open restored DB at {}", cfg.db_path.display())
@@ -136,15 +119,15 @@ fn main() -> Result<()> {
         }
 
         /* ---- passthrough sub-modules (some still stubs) ---------- */
-        Commands::Link(link_cmd)   => cli::link::run(&link_cmd,   &mut conn, args.format)?,
-        Commands::Coll(coll_cmd)   => cli::coll::run(&coll_cmd,   &mut conn, args.format)?,
-        Commands::View(view_cmd)   => cli::view::run(&view_cmd,   &mut conn, args.format)?,
+        Commands::Link(link_cmd) => cli::link::run(&link_cmd, &mut conn, args.format)?,
+        Commands::Coll(coll_cmd) => cli::coll::run(&coll_cmd, &mut conn, args.format)?,
+        Commands::View(view_cmd) => cli::view::run(&view_cmd, &mut conn, args.format)?,
         Commands::State(state_cmd) => cli::state::run(&state_cmd, &mut conn, args.format)?,
-        Commands::Task(task_cmd)   => cli::task::run(&task_cmd,   &mut conn, args.format)?,
-        Commands::Remind(rm_cmd)   => cli::remind::run(&rm_cmd,   &mut conn, args.format)?,
-        Commands::Annotate(a_cmd)  => cli::annotate::run(&a_cmd,  &mut conn, args.format)?,
-        Commands::Version(v_cmd)   => cli::version::run(&v_cmd,   &mut conn, args.format)?,
-        Commands::Event(e_cmd)     => cli::event::run(&e_cmd,     &mut conn, args.format)?,
+        Commands::Task(task_cmd) => cli::task::run(&task_cmd, &mut conn, args.format)?,
+        Commands::Remind(rm_cmd) => cli::remind::run(&rm_cmd, &mut conn, args.format)?,
+        Commands::Annotate(a_cmd) => cli::annotate::run(&a_cmd, &mut conn, args.format)?,
+        Commands::Version(v_cmd) => cli::version::run(&v_cmd, &mut conn, args.format)?,
+        Commands::Event(e_cmd) => cli::event::run(&e_cmd, &mut conn, args.format)?,
         Commands::Watch(watch_cmd) => cli::watch::run(&watch_cmd, &mut conn, args.format)?,
     }
 
@@ -160,22 +143,19 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
     let mut current = Some(leaf_tag_id);
     while let Some(id) = current {
         tag_ids.push(id);
-        current = conn.query_row(
-            "SELECT parent_id FROM tags WHERE id=?1",
-            [id],
-            |r| r.get::<_, Option<i64>>(0),
-        )?;
+        current = conn.query_row("SELECT parent_id FROM tags WHERE id=?1", [id], |r| {
+            r.get::<_, Option<i64>>(0)
+        })?;
     }
 
     let expanded = shellexpand::tilde(pattern).into_owned();
-    let pat  = Pattern::new(&expanded)
-        .with_context(|| format!("Invalid glob pattern `{expanded}`"))?;
+    let pat =
+        Pattern::new(&expanded).with_context(|| format!("Invalid glob pattern `{expanded}`"))?;
     let root = determine_scan_root(&expanded);
 
-    let mut stmt_file   = conn.prepare("SELECT id FROM files WHERE path=?1")?;
-    let mut stmt_insert = conn.prepare(
-        "INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)",
-    )?;
+    let mut stmt_file = conn.prepare("SELECT id FROM files WHERE path=?1")?;
+    let mut stmt_insert =
+        conn.prepare("INSERT OR IGNORE INTO file_tags(file_id, tag_id) VALUES (?1, ?2)")?;
 
     let mut count = 0usize;
     for entry in WalkDir::new(&root)
@@ -184,7 +164,9 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
         .filter(|e| e.file_type().is_file())
     {
         let p = entry.path().to_string_lossy();
-        if !pat.matches(&p) { continue; }
+        if !pat.matches(&p) {
+            continue;
+        }
 
         match stmt_file.query_row([p.as_ref()], |r| r.get::<_, i64>(0)) {
             Ok(fid) => {
@@ -199,10 +181,10 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
                     count += 1;
                 }
             }
-            Err(rusqlite::Error::QueryReturnedNoRows) =>
-                error!(file=%p, "not indexed – run `marlin scan` first"),
-            Err(e) =>
-                error!(file=%p, error=%e, "could not lookup file ID"),
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                error!(file=%p, "not indexed – run `marlin scan` first")
+            }
+            Err(e) => error!(file=%p, error=%e, "could not lookup file ID"),
         }
     }
 
@@ -213,8 +195,8 @@ fn apply_tag(conn: &rusqlite::Connection, pattern: &str, tag_path: &str) -> Resu
 /* ---------- ATTRIBUTES ---------- */
 fn attr_set(conn: &rusqlite::Connection, pattern: &str, key: &str, value: &str) -> Result<()> {
     let expanded = shellexpand::tilde(pattern).into_owned();
-    let pat  = Pattern::new(&expanded)
-        .with_context(|| format!("Invalid glob pattern `{expanded}`"))?;
+    let pat =
+        Pattern::new(&expanded).with_context(|| format!("Invalid glob pattern `{expanded}`"))?;
     let root = determine_scan_root(&expanded);
 
     let mut stmt_file = conn.prepare("SELECT id FROM files WHERE path=?1")?;
@@ -226,7 +208,9 @@ fn attr_set(conn: &rusqlite::Connection, pattern: &str, key: &str, value: &str) 
         .filter(|e| e.file_type().is_file())
     {
         let p = entry.path().to_string_lossy();
-        if !pat.matches(&p) { continue; }
+        if !pat.matches(&p) {
+            continue;
+        }
 
         match stmt_file.query_row([p.as_ref()], |r| r.get::<_, i64>(0)) {
             Ok(fid) => {
@@ -234,10 +218,10 @@ fn attr_set(conn: &rusqlite::Connection, pattern: &str, key: &str, value: &str) 
                 info!(file=%p, key, value, "attr set");
                 count += 1;
             }
-            Err(rusqlite::Error::QueryReturnedNoRows) =>
-                error!(file=%p, "not indexed – run `marlin scan` first"),
-            Err(e) =>
-                error!(file=%p, error=%e, "could not lookup file ID"),
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                error!(file=%p, "not indexed – run `marlin scan` first")
+            }
+            Err(e) => error!(file=%p, error=%e, "could not lookup file ID"),
         }
     }
 
@@ -247,12 +231,11 @@ fn attr_set(conn: &rusqlite::Connection, pattern: &str, key: &str, value: &str) 
 
 fn attr_ls(conn: &rusqlite::Connection, path: &Path) -> Result<()> {
     let fid = db::file_id(conn, &path.to_string_lossy())?;
-    let mut stmt = conn.prepare(
-        "SELECT key, value FROM attributes WHERE file_id=?1 ORDER BY key"
-    )?;
-    for row in stmt
-        .query_map([fid], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
-    {
+    let mut stmt =
+        conn.prepare("SELECT key, value FROM attributes WHERE file_id=?1 ORDER BY key")?;
+    for row in stmt.query_map([fid], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })? {
         let (k, v) = row?;
         println!("{k} = {v}");
     }
@@ -268,7 +251,9 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
             parts.push(tok);
         } else if let Some(tag) = tok.strip_prefix("tag:") {
             for (i, seg) in tag.split('/').filter(|s| !s.is_empty()).enumerate() {
-                if i > 0 { parts.push("AND".into()); }
+                if i > 0 {
+                    parts.push("AND".into());
+                }
                 parts.push(format!("tags_text:{}", escape_fts(seg)));
             }
         } else if let Some(attr) = tok.strip_prefix("attr:") {
@@ -310,11 +295,11 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
         run_exec(&hits, &cmd_tpl)?;
     } else {
         if hits.is_empty() {
-            eprintln!(
-                "No matches for query: `{raw_query}` (FTS expr: `{fts_expr}`)"
-            );
+            eprintln!("No matches for query: `{raw_query}` (FTS expr: `{fts_expr}`)");
         } else {
-            for p in hits { println!("{p}"); }
+            for p in hits {
+                println!("{p}");
+            }
         }
     }
     Ok(())
@@ -333,7 +318,9 @@ fn naive_substring_search(conn: &rusqlite::Connection, term: &str) -> Result<Vec
             continue;
         }
         if let Ok(meta) = fs::metadata(&p) {
-            if meta.len() > 65_536 { continue; }
+            if meta.len() > 65_536 {
+                continue;
+            }
         }
         if let Ok(body) = fs::read_to_string(&p) {
             if body.to_lowercase().contains(&needle) {
@@ -369,7 +356,9 @@ fn run_exec(paths: &[String], cmd_tpl: &str) -> Result<()> {
                 format!("{cmd_tpl} {quoted}")
             };
             if let Some(mut parts) = shlex::split(&final_cmd) {
-                if parts.is_empty() { continue; }
+                if parts.is_empty() {
+                    continue;
+                }
                 let prog = parts.remove(0);
                 let status = Command::new(&prog).args(parts).status()?;
                 if !status.success() {
@@ -393,9 +382,9 @@ fn escape_fts(term: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::{apply_tag, attr_set, escape_fts, naive_substring_search, run_exec};
     use assert_cmd::Command;
     use tempfile::tempdir;
-    use super::{apply_tag, attr_set, naive_substring_search, run_exec, escape_fts};
 
     #[test]
     fn test_help_command() {
@@ -483,7 +472,10 @@ mod tests {
         cmd_scan.env("MARLIN_DB_PATH", &db_path);
         cmd_scan.arg("scan");
         cmd_scan.assert().success();
-        assert!(backups_dir.exists(), "Backups directory should exist after scan");
+        assert!(
+            backups_dir.exists(),
+            "Backups directory should exist after scan"
+        );
         let backups: Vec<_> = backups_dir.read_dir().unwrap().collect();
         assert_eq!(backups.len(), 1, "One backup should be created for scan");
     }
@@ -504,7 +496,11 @@ mod tests {
         let tmp = tempdir().unwrap();
         let mut cmd = Command::cargo_bin("marlin").unwrap();
         cmd.env("MARLIN_DB_PATH", tmp.path().join("index.db"));
-        cmd.arg("event").arg("add").arg("file.txt").arg("2025-05-20").arg("desc");
+        cmd.arg("event")
+            .arg("add")
+            .arg("file.txt")
+            .arg("2025-05-20")
+            .arg("desc");
         cmd.assert()
             .failure()
             .stderr(predicates::str::contains("not yet implemented"));
@@ -516,8 +512,8 @@ mod tests {
 
     #[test]
     fn test_tagging_and_attributes_update_db() {
-        use std::fs::File;
         use libmarlin::scan::scan_directory;
+        use std::fs::File;
 
         let tmp = tempdir().unwrap();
         let file_path = tmp.path().join("a.txt");
@@ -567,7 +563,11 @@ mod tests {
         fs::write(&script, "#!/bin/sh\necho $1 >> $LOGFILE\n").unwrap();
         std::env::set_var("LOGFILE", &log);
 
-        run_exec(&[f1.to_string_lossy().to_string()], &format!("sh {} {{}}", script.display())).unwrap();
+        run_exec(
+            &[f1.to_string_lossy().to_string()],
+            &format!("sh {} {{}}", script.display()),
+        )
+        .unwrap();
         let logged = fs::read_to_string(&log).unwrap();
         assert!(logged.contains("hello.txt"));
     }

@@ -1,7 +1,7 @@
 // src/cli/version.rs
-use clap::{Subcommand, Args};
-use rusqlite::Connection;
 use crate::cli::Format;
+use clap::{Args, Subcommand};
+use rusqlite::Connection;
 
 #[derive(Subcommand, Debug)]
 pub enum VersionCmd {
@@ -9,7 +9,9 @@ pub enum VersionCmd {
 }
 
 #[derive(Args, Debug)]
-pub struct ArgsDiff { pub file: String }
+pub struct ArgsDiff {
+    pub file: String,
+}
 
 pub fn run(cmd: &VersionCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {

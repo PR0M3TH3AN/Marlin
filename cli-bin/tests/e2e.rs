@@ -25,8 +25,8 @@ fn spawn_demo_tree(root: &PathBuf) {
     fs::write(root.join("Projects/Alpha/draft2.md"), "- [x] TODO foo\n").unwrap();
     fs::write(root.join("Projects/Beta/final.md"), "done\n").unwrap();
     fs::write(root.join("Projects/Gamma/TODO.txt"), "TODO bar\n").unwrap();
-    fs::write(root.join("Logs/app.log"),           "ERROR omg\n").unwrap();
-    fs::write(root.join("Reports/Q1.pdf"),         "PDF\n").unwrap();
+    fs::write(root.join("Logs/app.log"), "ERROR omg\n").unwrap();
+    fs::write(root.join("Reports/Q1.pdf"), "PDF\n").unwrap();
 }
 
 /// Shorthand for “run and must succeed”.
@@ -38,7 +38,7 @@ fn ok(cmd: &mut Command) -> assert_cmd::assert::Assert {
 fn full_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     /* ── 1 ░ sandbox ───────────────────────────────────────────── */
 
-    let tmp      = tempdir()?;                 // wiped on drop
+    let tmp = tempdir()?; // wiped on drop
     let demo_dir = tmp.path().join("marlin_demo");
     spawn_demo_tree(&demo_dir);
 
@@ -53,9 +53,7 @@ fn full_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
 
     /* ── 2 ░ init ( auto-scan cwd ) ───────────────────────────── */
 
-    ok(marlin()
-        .current_dir(&demo_dir)
-        .arg("init"));
+    ok(marlin().current_dir(&demo_dir).arg("init"));
 
     /* ── 3 ░ tag & attr demos ─────────────────────────────────── */
 
@@ -74,12 +72,14 @@ fn full_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
     /* ── 4 ░ quick search sanity checks ───────────────────────── */
 
     marlin()
-        .arg("search").arg("TODO")
+        .arg("search")
+        .arg("TODO")
         .assert()
         .stdout(predicate::str::contains("TODO.txt"));
 
     marlin()
-        .arg("search").arg("attr:reviewed=yes")
+        .arg("search")
+        .arg("attr:reviewed=yes")
         .assert()
         .stdout(predicate::str::contains("Q1.pdf"));
 
@@ -92,31 +92,29 @@ fn full_cli_flow() -> Result<(), Box<dyn std::error::Error>> {
 
     ok(marlin().arg("scan").arg(&demo_dir));
 
-    ok(marlin()
-        .arg("link").arg("add")
-        .arg(&foo).arg(&bar));
+    ok(marlin().arg("link").arg("add").arg(&foo).arg(&bar));
 
     marlin()
-        .arg("link").arg("backlinks").arg(&bar)
+        .arg("link")
+        .arg("backlinks")
+        .arg(&bar)
         .assert()
         .stdout(predicate::str::contains("foo.txt"));
 
     /* ── 6 ░ backup → delete DB → restore ────────────────────── */
 
-    let backup_path = String::from_utf8(
-        marlin().arg("backup").output()?.stdout
-    )?;
+    let backup_path = String::from_utf8(marlin().arg("backup").output()?.stdout)?;
     let backup_file = backup_path.split_whitespace().last().unwrap();
 
-    fs::remove_file(&db_path)?;                        // simulate corruption
-    ok(marlin().arg("restore").arg(backup_file));      // restore
+    fs::remove_file(&db_path)?; // simulate corruption
+    ok(marlin().arg("restore").arg(backup_file)); // restore
 
     // Search must still work afterwards
     marlin()
-        .arg("search").arg("TODO")
+        .arg("search")
+        .arg("TODO")
         .assert()
         .stdout(predicate::str::contains("TODO.txt"));
 
     Ok(())
 }
-

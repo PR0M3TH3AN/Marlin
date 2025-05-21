@@ -1,7 +1,7 @@
 // src/cli/remind.rs
-use clap::{Subcommand, Args};
-use rusqlite::Connection;
 use crate::cli::Format;
+use clap::{Args, Subcommand};
+use rusqlite::Connection;
 
 #[derive(Subcommand, Debug)]
 pub enum RemindCmd {
@@ -11,8 +11,8 @@ pub enum RemindCmd {
 #[derive(Args, Debug)]
 pub struct ArgsSet {
     pub file_pattern: String,
-    pub timestamp:    String,
-    pub message:      String,
+    pub timestamp: String,
+    pub message: String,
 }
 
 pub fn run(cmd: &RemindCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {

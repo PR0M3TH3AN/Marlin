@@ -5,8 +5,8 @@ use clap::Subcommand;
 use libmarlin::watcher::{WatcherConfig, WatcherState};
 use rusqlite::Connection;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use tracing::info;
@@ -30,15 +30,15 @@ pub enum WatchCmd {
         /// Directory to watch (defaults to current directory)
         #[arg(default_value = ".")]
         path: PathBuf,
-        
+
         /// Debounce window in milliseconds (default: 100ms)
         #[arg(long, default_value = "100")]
         debounce_ms: u64,
     },
-    
+
     /// Show status of currently active watcher
     Status,
-    
+
     /// Stop the currently running watcher
     Stop,
 }
@@ -60,7 +60,7 @@ pub fn run(cmd: &WatchCmd, _conn: &mut Connection, _format: super::Format) -> Re
             let status = watcher.status()?;
             info!("Watcher started. Press Ctrl+C to stop watching.");
             info!("Watching {} paths", status.watched_paths.len());
-            
+
             let start_time = Instant::now();
             let mut last_status_time = Instant::now();
             let running = Arc::new(AtomicBool::new(true));
@@ -80,7 +80,7 @@ pub fn run(cmd: &WatchCmd, _conn: &mut Connection, _format: super::Format) -> Re
                 }
 
                 // Corrected line: removed the extra closing parenthesis
-                if last_status_time.elapsed() > Duration::from_secs(10) { 
+                if last_status_time.elapsed() > Duration::from_secs(10) {
                     let uptime = start_time.elapsed();
                     info!(
                         "Watcher running for {}s, processed {} events, queue: {}, state: {:?}",
@@ -104,7 +104,9 @@ pub fn run(cmd: &WatchCmd, _conn: &mut Connection, _format: super::Format) -> Re
             Ok(())
         }
         WatchCmd::Status => {
-            info!("Status command: No active watcher process to query in this CLI invocation model.");
+            info!(
+                "Status command: No active watcher process to query in this CLI invocation model."
+            );
             info!("To see live status, run 'marlin watch start' which prints periodic updates.");
             Ok(())
         }

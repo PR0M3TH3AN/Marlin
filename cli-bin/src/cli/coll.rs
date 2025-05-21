@@ -3,8 +3,8 @@
 use clap::{Args, Subcommand};
 use rusqlite::Connection;
 
-use crate::cli::Format;   // local enum for text / json output
-use libmarlin::db;        // core DB helpers from the library crate
+use crate::cli::Format; // local enum for text / json output
+use libmarlin::db; // core DB helpers from the library crate
 
 #[derive(Subcommand, Debug)]
 pub enum CollCmd {
@@ -36,11 +36,9 @@ pub struct ListArgs {
 ///
 /// Returns the collection ID or an error if it doesn’t exist.
 fn lookup_collection_id(conn: &Connection, name: &str) -> anyhow::Result<i64> {
-    conn.query_row(
-        "SELECT id FROM collections WHERE name = ?1",
-        [name],
-        |r| r.get(0),
-    )
+    conn.query_row("SELECT id FROM collections WHERE name = ?1", [name], |r| {
+        r.get(0)
+    })
     .map_err(|_| anyhow::anyhow!("collection not found: {}", name))
 }
 
@@ -74,11 +72,7 @@ pub fn run(cmd: &CollCmd, conn: &mut Connection, fmt: Format) -> anyhow::Result<
                 Format::Json => {
                     #[cfg(feature = "json")]
                     {
-                        println!(
-                            "{{\"collection\":\"{}\",\"added\":{}}}",
-                            a.name,
-                            ids.len()
-                        );
+                        println!("{{\"collection\":\"{}\",\"added\":{}}}", a.name, ids.len());
                     }
                 }
             }

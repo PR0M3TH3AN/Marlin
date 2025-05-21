@@ -1,7 +1,7 @@
 // libmarlin/src/backup.rs
 
 use anyhow::{anyhow, Context, Result};
-use chrono::{DateTime, Local, NaiveDateTime, Utc, TimeZone};
+use chrono::{DateTime, Local, NaiveDateTime, TimeZone, Utc};
 use rusqlite;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -30,7 +30,10 @@ pub struct BackupManager {
 }
 
 impl BackupManager {
-    pub fn new<P1: AsRef<Path>, P2: AsRef<Path>>(live_db_path: P1, backups_dir: P2) -> Result<Self> {
+    pub fn new<P1: AsRef<Path>, P2: AsRef<Path>>(
+        live_db_path: P1,
+        backups_dir: P2,
+    ) -> Result<Self> {
         let backups_dir_path = backups_dir.as_ref().to_path_buf();
         if !backups_dir_path.exists() {
             fs::create_dir_all(&backups_dir_path).with_context(|| {
@@ -40,7 +43,10 @@ impl BackupManager {
                 )
             })?;
         } else if !backups_dir_path.is_dir() {
-            return Err(anyhow!("Backups path exists but is not a directory: {}", backups_dir_path.display()));
+            return Err(anyhow!(
+                "Backups path exists but is not a directory: {}",
+                backups_dir_path.display()
+            ));
         }
         Ok(Self {
             live_db_path: live_db_path.as_ref().to_path_buf(),
@@ -54,10 +60,14 @@ impl BackupManager {
         let backup_file_path = self.backups_dir.join(&backup_file_name);
 
         if !self.live_db_path.exists() {
-             return Err(anyhow::Error::new(std::io::Error::new(
+            return Err(anyhow::Error::new(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("Live DB path does not exist: {}", self.live_db_path.display()),
-            )).context("Cannot create backup from non-existent live DB"));
+                format!(
+                    "Live DB path does not exist: {}",
+                    self.live_db_path.display()
+                ),
+            ))
+            .context("Cannot create backup from non-existent live DB"));
         }
 
         let src_conn = rusqlite::Connection::open_with_flags(
@@ -108,8 +118,8 @@ impl BackupManager {
 
     pub fn list_backups(&self) -> Result<Vec<BackupInfo>> {
         let mut backup_infos = Vec::new();
-        
-        if !self.backups_dir.exists() { 
+
+        if !self.backups_dir.exists() {
             return Ok(backup_infos);
         }
 
@@ -129,28 +139,42 @@ impl BackupManager {
                             let ts_str = filename
                                 .trim_start_matches("backup_")
                                 .trim_end_matches(".db");
-                            
-                            let naive_dt = match NaiveDateTime::parse_from_str(ts_str, "%Y-%m-%d_%H-%M-%S_%f") {
-                                Ok(dt) => dt,
-                                Err(_) => match NaiveDateTime::parse_from_str(ts_str, "%Y-%m-%d_%H-%M-%S") {
+
+                            let naive_dt =
+                                match NaiveDateTime::parse_from_str(ts_str, "%Y-%m-%d_%H-%M-%S_%f")
+                                {
                                     Ok(dt) => dt,
-                                    Err(_) => { 
-                                        let metadata = fs::metadata(&path).with_context(|| format!("Failed to get metadata for {}", path.display()))?;
-                                        DateTime::<Utc>::from(metadata.modified()?).naive_utc()
-                                    }
-                                }
-                            };
-                            
+                                    Err(_) => match NaiveDateTime::parse_from_str(
+                                        ts_str,
+                                        "%Y-%m-%d_%H-%M-%S",
+                                    ) {
+                                        Ok(dt) => dt,
+                                        Err(_) => {
+                                            let metadata =
+                                                fs::metadata(&path).with_context(|| {
+                                                    format!(
+                                                        "Failed to get metadata for {}",
+                                                        path.display()
+                                                    )
+                                                })?;
+                                            DateTime::<Utc>::from(metadata.modified()?).naive_utc()
+                                        }
+                                    },
+                                };
+
                             let local_dt_result = Local.from_local_datetime(&naive_dt);
                             let local_dt = match local_dt_result {
                                 chrono::LocalResult::Single(dt) => dt,
                                 chrono::LocalResult::Ambiguous(dt1, _dt2) => {
                                     eprintln!("Warning: Ambiguous local time for backup {}, taking first interpretation.", filename);
                                     dt1
-                                },
+                                }
                                 chrono::LocalResult::None => {
-                                    eprintln!("Warning: Invalid local time for backup {}, skipping.", filename);
-                                    continue; 
+                                    eprintln!(
+                                        "Warning: Invalid local time for backup {}, skipping.",
+                                        filename
+                                    );
+                                    continue;
                                 }
                             };
                             let timestamp_utc = DateTime::<Utc>::from(local_dt);
@@ -172,12 +196,12 @@ impl BackupManager {
     }
 
     pub fn prune(&self, keep_count: usize) -> Result<PruneResult> {
-        let all_backups = self.list_backups()?; 
+        let all_backups = self.list_backups()?;
 
         let mut kept = Vec::new();
         let mut removed = Vec::new();
 
-        if keep_count >= all_backups.len() { 
+        if keep_count >= all_backups.len() {
             kept = all_backups;
         } else {
             for (index, backup_info) in all_backups.into_iter().enumerate() {
@@ -185,7 +209,7 @@ impl BackupManager {
                     kept.push(backup_info);
                 } else {
                     let backup_file_path = self.backups_dir.join(&backup_info.id);
-                    if backup_file_path.exists() { 
+                    if backup_file_path.exists() {
                         fs::remove_file(&backup_file_path).with_context(|| {
                             format!(
                                 "Failed to remove old backup file: {}",
@@ -223,16 +247,22 @@ impl BackupManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use crate::db::open as open_marlin_db;
+    use tempfile::tempdir;
 
     fn create_valid_live_db(path: &Path) -> rusqlite::Connection {
-        let conn = open_marlin_db(path)
-            .unwrap_or_else(|e| panic!("Failed to open/create test DB at {}: {:?}", path.display(), e));
+        let conn = open_marlin_db(path).unwrap_or_else(|e| {
+            panic!(
+                "Failed to open/create test DB at {}: {:?}",
+                path.display(),
+                e
+            )
+        });
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS test_table (id INTEGER PRIMARY KEY, data TEXT);
-             INSERT INTO test_table (data) VALUES ('initial_data');"
-        ).expect("Failed to initialize test table");
+             INSERT INTO test_table (data) VALUES ('initial_data');",
+        )
+        .expect("Failed to initialize test table");
         conn
     }
 
@@ -246,7 +276,7 @@ mod tests {
 
         assert!(!backups_dir.exists());
         let manager = BackupManager::new(&live_db_path, &backups_dir).unwrap();
-        assert!(manager.backups_dir.exists()); 
+        assert!(manager.backups_dir.exists());
         assert!(backups_dir.exists());
     }
 
@@ -257,7 +287,7 @@ mod tests {
         let _conn = create_valid_live_db(&live_db_path);
 
         let backups_dir = base_tmp.path().join("my_backups_existing_test");
-        std::fs::create_dir_all(&backups_dir).unwrap(); 
+        std::fs::create_dir_all(&backups_dir).unwrap();
 
         assert!(backups_dir.exists());
         let manager_res = BackupManager::new(&live_db_path, &backups_dir);
@@ -265,7 +295,7 @@ mod tests {
         let manager = manager_res.unwrap();
         assert_eq!(manager.backups_dir, backups_dir);
     }
-    
+
     #[test]
     fn test_backup_manager_new_fails_if_backup_path_is_file() {
         let base_tmp = tempdir().unwrap();
@@ -276,20 +306,26 @@ mod tests {
 
         let manager_res = BackupManager::new(&live_db_path, &file_as_backups_dir);
         assert!(manager_res.is_err());
-        assert!(manager_res.unwrap_err().to_string().contains("Backups path exists but is not a directory"));
+        assert!(manager_res
+            .unwrap_err()
+            .to_string()
+            .contains("Backups path exists but is not a directory"));
     }
 
     #[test]
     fn test_create_backup_failure_non_existent_live_db() {
         let base_tmp = tempdir().unwrap();
-        let live_db_path = base_tmp.path().join("non_existent_live.db"); 
+        let live_db_path = base_tmp.path().join("non_existent_live.db");
         let backups_dir = base_tmp.path().join("backups_fail_test");
 
         let manager = BackupManager::new(&live_db_path, &backups_dir).unwrap();
         let backup_result = manager.create_backup();
         assert!(backup_result.is_err());
         let err_str = backup_result.unwrap_err().to_string();
-        assert!(err_str.contains("Cannot create backup from non-existent live DB") || err_str.contains("Failed to open source DB"));
+        assert!(
+            err_str.contains("Cannot create backup from non-existent live DB")
+                || err_str.contains("Failed to open source DB")
+        );
     }
 
     #[test]
@@ -299,11 +335,14 @@ mod tests {
         let _conn_live = create_valid_live_db(&live_db_file);
 
         let backups_storage_dir = tmp.path().join("backups_clp_storage_test");
-        
+
         let manager = BackupManager::new(&live_db_file, &backups_storage_dir).unwrap();
 
         let initial_list = manager.list_backups().unwrap();
-        assert!(initial_list.is_empty(), "Backup list should be empty initially");
+        assert!(
+            initial_list.is_empty(),
+            "Backup list should be empty initially"
+        );
 
         let prune_empty_result = manager.prune(2).unwrap();
         assert!(prune_empty_result.kept.is_empty());
@@ -314,7 +353,7 @@ mod tests {
             let info = manager
                 .create_backup()
                 .unwrap_or_else(|e| panic!("Failed to create backup {}: {:?}", i, e));
-            created_backup_ids.push(info.id.clone()); 
+            created_backup_ids.push(info.id.clone());
             std::thread::sleep(std::time::Duration::from_millis(30));
         }
 
@@ -323,7 +362,8 @@ mod tests {
         for id in &created_backup_ids {
             assert!(
                 listed_backups.iter().any(|b| &b.id == id),
-                "Backup ID {} not found in list", id
+                "Backup ID {} not found in list",
+                id
             );
         }
         if listed_backups.len() >= 2 {
@@ -337,7 +377,7 @@ mod tests {
         assert!(listed_after_prune_zero.is_empty());
 
         created_backup_ids.clear();
-        for i in 0..5 { 
+        for i in 0..5 {
             let info = manager
                 .create_backup()
                 .unwrap_or_else(|e| panic!("Failed to create backup {}: {:?}", i, e));
@@ -360,31 +400,34 @@ mod tests {
 
         assert_eq!(listed_after_prune[0].id, created_backup_ids[4]);
         assert_eq!(listed_after_prune[1].id, created_backup_ids[3]);
-        
+
         for removed_info in prune_result.removed {
             assert!(
                 !backups_storage_dir.join(&removed_info.id).exists(),
-                "Removed backup file {} should not exist", removed_info.id
+                "Removed backup file {} should not exist",
+                removed_info.id
             );
         }
         for kept_info in prune_result.kept {
             assert!(
                 backups_storage_dir.join(&kept_info.id).exists(),
-                "Kept backup file {} should exist", kept_info.id
+                "Kept backup file {} should exist",
+                kept_info.id
             );
         }
     }
 
-     #[test]
+    #[test]
     fn test_restore_backup() {
         let tmp = tempdir().unwrap();
         let live_db_path = tmp.path().join("live_for_restore_test.db");
-        
+
         let initial_value = "initial_data_for_restore";
         {
             let conn = create_valid_live_db(&live_db_path);
-            conn.execute("DELETE FROM test_table", []).unwrap(); 
-            conn.execute("INSERT INTO test_table (data) VALUES (?1)", [initial_value]).unwrap();
+            conn.execute("DELETE FROM test_table", []).unwrap();
+            conn.execute("INSERT INTO test_table (data) VALUES (?1)", [initial_value])
+                .unwrap();
         }
 
         let backups_dir = tmp.path().join("backups_for_restore_test_dir");
@@ -403,7 +446,7 @@ mod tests {
                 .unwrap();
             assert_eq!(modified_check, modified_value);
         }
-        
+
         manager.restore_from_backup(&backup_info.id).unwrap();
 
         {
@@ -428,7 +471,11 @@ mod tests {
         let result = manager.restore_from_backup("non_existent_backup.db");
         assert!(result.is_err());
         let err_string = result.unwrap_err().to_string();
-        assert!(err_string.contains("Backup file not found"), "Error string was: {}", err_string);
+        assert!(
+            err_string.contains("Backup file not found"),
+            "Error string was: {}",
+            err_string
+        );
     }
 
     #[test]
@@ -437,17 +484,13 @@ mod tests {
         let live_db_file = tmp.path().join("live_for_list_test.db");
         let _conn = create_valid_live_db(&live_db_file);
         let backups_dir = tmp.path().join("backups_list_mixed_files_test");
-        
+
         let manager = BackupManager::new(&live_db_file, &backups_dir).unwrap();
 
-        manager.create_backup().unwrap(); 
-        
+        manager.create_backup().unwrap();
+
         std::fs::write(backups_dir.join("not_a_backup.txt"), "hello").unwrap();
-        std::fs::write(
-            backups_dir.join("backup_malformed.db.tmp"),
-            "temp data",
-        )
-        .unwrap();
+        std::fs::write(backups_dir.join("backup_malformed.db.tmp"), "temp data").unwrap();
         std::fs::create_dir(backups_dir.join("a_subdir")).unwrap();
 
         let listed_backups = manager.list_backups().unwrap();
@@ -460,15 +503,16 @@ mod tests {
         assert!(listed_backups[0].id.ends_with(".db"));
     }
 
-     #[test]
+    #[test]
     fn list_backups_handles_io_error_on_read_dir() {
         let tmp = tempdir().unwrap();
         let live_db_file = tmp.path().join("live_for_list_io_error.db");
         let _conn = create_valid_live_db(&live_db_file);
-        
+
         let backups_dir_for_deletion = tmp.path().join("backups_dir_to_delete_test");
-        let manager_for_deletion = BackupManager::new(&live_db_file, &backups_dir_for_deletion).unwrap();
-        std::fs::remove_dir_all(&backups_dir_for_deletion).unwrap(); 
+        let manager_for_deletion =
+            BackupManager::new(&live_db_file, &backups_dir_for_deletion).unwrap();
+        std::fs::remove_dir_all(&backups_dir_for_deletion).unwrap();
 
         let list_res = manager_for_deletion.list_backups().unwrap();
         assert!(list_res.is_empty());
