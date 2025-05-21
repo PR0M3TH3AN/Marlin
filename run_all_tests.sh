@@ -269,7 +269,7 @@ test_marlin_demo_flow() {
 
     log_info "Running backup and restore..."
     snap_output=$(run_cmd "${marlin_cmd}" backup)
-    snap_file=$(echo "${snap_output}" | awk '{print $NF}')
+    snap_file=$(echo "${snap_output}" | tail -n 1 | awk '{print $NF}')
     log_info "Backup created: ${snap_file}"
     
     if [ -z "${MARLIN_DB_PATH}" ]; then
