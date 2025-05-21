@@ -424,8 +424,10 @@ test_watcher_cli_basic() {
         log_error "Watcher log file not found: ${watcher_log}"
     fi
 
-    # TODO: Add verification of DB state after watcher (e.g., file_changes table, new files indexed)
-    # This would require querying the DB: sqlite3 "${watch_test_db}" "SELECT * FROM files;"
+    # DB verification is skipped for now because the watcher implementation
+    # only logs events and doesn't update the SQLite database yet. Once the
+    # watcher writes to the DB we can query "${watch_test_db}" here to assert
+    # that file_changes or files entries are created.
 
     unset MARLIN_DB_PATH
     log_info "Watcher CLI basic test complete."
