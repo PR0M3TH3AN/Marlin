@@ -2,11 +2,11 @@ use std::thread;
 use std::time::Duration;
 use tempfile::tempdir;
 
-use marlin_cli::cli::{watch, Format};
-use marlin_cli::cli::watch::WatchCmd;
+use libc;
 use libmarlin::watcher::WatcherState;
 use libmarlin::{self as marlin, db};
-use libc;
+use marlin_cli::cli::watch::WatchCmd;
+use marlin_cli::cli::{watch, Format};
 
 #[test]
 fn watch_start_and_stop_quickly() {
@@ -20,7 +20,10 @@ fn watch_start_and_stop_quickly() {
     let mut conn = db::open(&db_path).unwrap();
 
     let path = tmp.path().to_path_buf();
-    let cmd = WatchCmd::Start { path: path.clone(), debounce_ms: 50 };
+    let cmd = WatchCmd::Start {
+        path: path.clone(),
+        debounce_ms: 50,
+    };
 
     // send SIGINT shortly after watcher starts
     let t = thread::spawn(|| {

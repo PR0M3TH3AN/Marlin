@@ -90,7 +90,9 @@ fn file_id_returns_id_and_errors_on_missing() {
 
     // fetch its id via raw SQL
     let fid: i64 = conn
-        .query_row("SELECT id FROM files WHERE path='exist.txt'", [], |r| r.get(0))
+        .query_row("SELECT id FROM files WHERE path='exist.txt'", [], |r| {
+            r.get(0)
+        })
         .unwrap();
 
     // db::file_id should return the same id for existing paths
@@ -116,10 +118,14 @@ fn add_and_remove_links_and_backlinks() {
     )
     .unwrap();
     let src: i64 = conn
-        .query_row("SELECT id FROM files WHERE path='one.txt'", [], |r| r.get(0))
+        .query_row("SELECT id FROM files WHERE path='one.txt'", [], |r| {
+            r.get(0)
+        })
         .unwrap();
     let dst: i64 = conn
-        .query_row("SELECT id FROM files WHERE path='two.txt'", [], |r| r.get(0))
+        .query_row("SELECT id FROM files WHERE path='two.txt'", [], |r| {
+            r.get(0)
+        })
         .unwrap();
 
     // add a link of type "ref"
@@ -193,8 +199,11 @@ fn backup_and_restore_cycle() {
 
     // reopen and check that x.bin survived
     let conn2 = db::open(&db_path).unwrap();
-    let cnt: i64 =
-        conn2.query_row("SELECT COUNT(*) FROM files WHERE path='x.bin'", [], |r| r.get(0)).unwrap();
+    let cnt: i64 = conn2
+        .query_row("SELECT COUNT(*) FROM files WHERE path='x.bin'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
     assert_eq!(cnt, 1);
 }
 
@@ -210,7 +219,9 @@ mod dirty_helpers {
         )
         .unwrap();
         let fid: i64 = conn
-            .query_row("SELECT id FROM files WHERE path='dummy.txt'", [], |r| r.get(0))
+            .query_row("SELECT id FROM files WHERE path='dummy.txt'", [], |r| {
+                r.get(0)
+            })
             .unwrap();
 
         db::mark_dirty(&conn, fid).unwrap();

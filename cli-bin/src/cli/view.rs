@@ -6,8 +6,8 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 use rusqlite::Connection;
 
-use crate::cli::Format;   // output selector stays local
-use libmarlin::db;        // ← path switched from `crate::db`
+use crate::cli::Format; // output selector stays local
+use libmarlin::db; // ← path switched from `crate::db`
 
 #[derive(Subcommand, Debug)]
 pub enum ViewCmd {

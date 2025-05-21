@@ -1,7 +1,7 @@
 // src/cli/task.rs
-use clap::{Subcommand, Args};
-use rusqlite::Connection;
 use crate::cli::Format;
+use clap::{Args, Subcommand};
+use rusqlite::Connection;
 
 #[derive(Subcommand, Debug)]
 pub enum TaskCmd {
@@ -10,9 +10,14 @@ pub enum TaskCmd {
 }
 
 #[derive(Args, Debug)]
-pub struct ArgsScan { pub directory: String }
+pub struct ArgsScan {
+    pub directory: String,
+}
 #[derive(Args, Debug)]
-pub struct ArgsList { #[arg(long)] pub due_today: bool }
+pub struct ArgsList {
+    #[arg(long)]
+    pub due_today: bool,
+}
 
 pub fn run(cmd: &TaskCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {

@@ -5,9 +5,8 @@ mod tests {
     // Updated import for BackupManager from the new backup module
     use crate::backup::BackupManager;
     // These are still from the watcher module
-    use crate::watcher::{FileWatcher, WatcherConfig, WatcherState};
-    use crate::db::open as open_marlin_db; // Use your project's DB open function
-
+    use crate::db::open as open_marlin_db;
+    use crate::watcher::{FileWatcher, WatcherConfig, WatcherState}; // Use your project's DB open function
 
     use std::fs::{self, File};
     use std::io::Write;
@@ -54,7 +53,8 @@ mod tests {
             .append(true)
             .open(&test_file_path)
             .expect("Failed to open test file for modification");
-        writeln!(existing_file_handle, "Additional content").expect("Failed to append to test file");
+        writeln!(existing_file_handle, "Additional content")
+            .expect("Failed to append to test file");
         drop(existing_file_handle);
 
         thread::sleep(Duration::from_millis(200));
@@ -64,49 +64,84 @@ mod tests {
         watcher.stop().expect("Failed to stop watcher");
 
         assert_eq!(watcher.status().unwrap().state, WatcherState::Stopped);
-        assert!(watcher.status().unwrap().events_processed > 0, "Expected some file events to be processed");
+        assert!(
+            watcher.status().unwrap().events_processed > 0,
+            "Expected some file events to be processed"
+        );
     }
 
     #[test]
     fn test_backup_manager_related_functionality() {
         let live_db_tmp_dir = tempdir().expect("Failed to create temp directory for live DB");
-        let backups_storage_tmp_dir = tempdir().expect("Failed to create temp directory for backups storage");
-        
+        let backups_storage_tmp_dir =
+            tempdir().expect("Failed to create temp directory for backups storage");
+
         let live_db_path = live_db_tmp_dir.path().join("test_live_watcher.db"); // Unique name
         let backups_actual_dir = backups_storage_tmp_dir.path().join("my_backups_watcher"); // Unique name
 
         // Initialize a proper SQLite DB for the "live" database
-        let _conn = open_marlin_db(&live_db_path).expect("Failed to open test_live_watcher.db for backup test");
-        
+        let _conn = open_marlin_db(&live_db_path)
+            .expect("Failed to open test_live_watcher.db for backup test");
+
         let backup_manager = BackupManager::new(&live_db_path, &backups_actual_dir)
             .expect("Failed to create BackupManager instance");
-        
-        let backup_info = backup_manager.create_backup().expect("Failed to create first backup");
-        
-        assert!(backups_actual_dir.join(&backup_info.id).exists(), "Backup file should exist");
-        assert!(backup_info.size_bytes > 0, "Backup size should be greater than 0");
-        
+
+        let backup_info = backup_manager
+            .create_backup()
+            .expect("Failed to create first backup");
+
+        assert!(
+            backups_actual_dir.join(&backup_info.id).exists(),
+            "Backup file should exist"
+        );
+        assert!(
+            backup_info.size_bytes > 0,
+            "Backup size should be greater than 0"
+        );
+
         for i in 0..3 {
             std::thread::sleep(std::time::Duration::from_millis(30)); // Ensure timestamp difference
-            backup_manager.create_backup().unwrap_or_else(|e| panic!("Failed to create additional backup {}: {:?}", i, e));
+            backup_manager
+                .create_backup()
+                .unwrap_or_else(|e| panic!("Failed to create additional backup {}: {:?}", i, e));
         }
-        
-        let backups = backup_manager.list_backups().expect("Failed to list backups");
+
+        let backups = backup_manager
+            .list_backups()
+            .expect("Failed to list backups");
         assert_eq!(backups.len(), 4, "Should have 4 backups listed");
-        
+
         let prune_result = backup_manager.prune(2).expect("Failed to prune backups");
-        
+
         assert_eq!(prune_result.kept.len(), 2, "Should have kept 2 backups");
-        assert_eq!(prune_result.removed.len(), 2, "Should have removed 2 backups (4 initial - 2 kept)");
-        
-        let remaining_backups = backup_manager.list_backups().expect("Failed to list backups after prune");
-        assert_eq!(remaining_backups.len(), 2, "Should have 2 backups remaining after prune");
+        assert_eq!(
+            prune_result.removed.len(),
+            2,
+            "Should have removed 2 backups (4 initial - 2 kept)"
+        );
+
+        let remaining_backups = backup_manager
+            .list_backups()
+            .expect("Failed to list backups after prune");
+        assert_eq!(
+            remaining_backups.len(),
+            2,
+            "Should have 2 backups remaining after prune"
+        );
 
         for removed_info in prune_result.removed {
-            assert!(!backups_actual_dir.join(&removed_info.id).exists(), "Removed backup file {} should not exist", removed_info.id);
+            assert!(
+                !backups_actual_dir.join(&removed_info.id).exists(),
+                "Removed backup file {} should not exist",
+                removed_info.id
+            );
         }
         for kept_info in prune_result.kept {
-            assert!(backups_actual_dir.join(&kept_info.id).exists(), "Kept backup file {} should exist", kept_info.id);
+            assert!(
+                backups_actual_dir.join(&kept_info.id).exists(),
+                "Kept backup file {} should exist",
+                kept_info.id
+            );
         }
     }
 }

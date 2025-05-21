@@ -13,7 +13,11 @@ use util::marlin;
 fn link_non_indexed_should_fail() {
     let tmp = tempdir().unwrap();
 
-    marlin(&tmp).current_dir(tmp.path()).arg("init").assert().success();
+    marlin(&tmp)
+        .current_dir(tmp.path())
+        .arg("init")
+        .assert()
+        .success();
 
     std::fs::write(tmp.path().join("foo.txt"), "").unwrap();
     std::fs::write(tmp.path().join("bar.txt"), "").unwrap();
@@ -21,9 +25,10 @@ fn link_non_indexed_should_fail() {
     marlin(&tmp)
         .current_dir(tmp.path())
         .args([
-            "link", "add",
+            "link",
+            "add",
             &tmp.path().join("foo.txt").to_string_lossy(),
-            &tmp.path().join("bar.txt").to_string_lossy()
+            &tmp.path().join("bar.txt").to_string_lossy(),
         ])
         .assert()
         .failure()
@@ -35,16 +40,19 @@ fn link_non_indexed_should_fail() {
 #[test]
 fn attr_set_on_non_indexed_file_should_warn() {
     let tmp = tempdir().unwrap();
-    marlin(&tmp).current_dir(tmp.path()).arg("init").assert().success();
+    marlin(&tmp)
+        .current_dir(tmp.path())
+        .arg("init")
+        .assert()
+        .success();
 
     let ghost = tmp.path().join("ghost.txt");
     std::fs::write(&ghost, "").unwrap();
 
     marlin(&tmp)
-        .args(["attr","set",
-               &ghost.to_string_lossy(),"foo","bar"])
+        .args(["attr", "set", &ghost.to_string_lossy(), "foo", "bar"])
         .assert()
-        .success()                       // exits 0
+        .success() // exits 0
         .stderr(str::contains("not indexed"));
 }
 
@@ -52,14 +60,18 @@ fn attr_set_on_non_indexed_file_should_warn() {
 
 #[test]
 fn coll_add_unknown_collection_should_fail() {
-    let tmp  = tempdir().unwrap();
+    let tmp = tempdir().unwrap();
     let file = tmp.path().join("doc.txt");
     std::fs::write(&file, "").unwrap();
 
-    marlin(&tmp).current_dir(tmp.path()).arg("init").assert().success();
+    marlin(&tmp)
+        .current_dir(tmp.path())
+        .arg("init")
+        .assert()
+        .success();
 
     marlin(&tmp)
-        .args(["coll","add","nope",&file.to_string_lossy()])
+        .args(["coll", "add", "nope", &file.to_string_lossy()])
         .assert()
         .failure();
 }
@@ -68,7 +80,7 @@ fn coll_add_unknown_collection_should_fail() {
 
 #[test]
 fn restore_with_nonexistent_backup_should_fail() {
-    let tmp   = tempdir().unwrap();
+    let tmp = tempdir().unwrap();
 
     // create an empty DB first
     marlin(&tmp).arg("init").assert().success();
@@ -79,4 +91,3 @@ fn restore_with_nonexistent_backup_should_fail() {
         .failure()
         .stderr(str::contains("Failed to restore"));
 }
-

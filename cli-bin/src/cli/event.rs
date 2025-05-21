@@ -1,11 +1,11 @@
 // src/cli/event.rs
-use clap::{Subcommand, Args};
-use rusqlite::Connection;
 use crate::cli::Format;
+use clap::{Args, Subcommand};
+use rusqlite::Connection;
 
 #[derive(Subcommand, Debug)]
 pub enum EventCmd {
-    Add     (ArgsAdd),
+    Add(ArgsAdd),
     Timeline,
 }
 
@@ -18,7 +18,7 @@ pub struct ArgsAdd {
 
 pub fn run(cmd: &EventCmd, _conn: &mut Connection, _format: Format) -> anyhow::Result<()> {
     match cmd {
-        EventCmd::Add(a)      => todo!("event add {:?}", a),
-        EventCmd::Timeline    => todo!("event timeline"),
+        EventCmd::Add(a) => todo!("event add {:?}", a),
+        EventCmd::Timeline => todo!("event timeline"),
     }
 }

@@ -21,7 +21,10 @@ pub fn determine_scan_root(pattern: &str) -> PathBuf {
 
     // If there were NO wildcards at all, just return the parent directory
     if first_wild == pattern.len() {
-        return root.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
+        return root
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."));
     }
 
     // Otherwise, if the prefix still has any wildcards (e.g. "foo*/bar"),

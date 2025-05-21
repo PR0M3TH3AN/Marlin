@@ -1,7 +1,7 @@
 // libmarlin/src/error.rs
 
-use std::io;
 use std::fmt;
+use std::io;
 // Ensure these are present if Error enum variants use them directly
 // use rusqlite;
 // use notify;
@@ -11,8 +11,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),
-    Database(rusqlite::Error), 
-    Watch(notify::Error),    
+    Database(rusqlite::Error),
+    Watch(notify::Error),
     InvalidState(String),
     NotFound(String),
     Config(String),
@@ -65,12 +65,13 @@ impl From<notify::Error> for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::error::Error as StdError; 
+    use std::error::Error as StdError;
 
     #[test]
     fn test_error_display_and_from() {
         // Test Io variant
-        let io_err_inner_for_source_check = io::Error::new(io::ErrorKind::NotFound, "test io error");
+        let io_err_inner_for_source_check =
+            io::Error::new(io::ErrorKind::NotFound, "test io error");
         let io_err_marlin = Error::from(io::Error::new(io::ErrorKind::NotFound, "test io error"));
         assert_eq!(io_err_marlin.to_string(), "IO error: test io error");
         let source = io_err_marlin.source();
@@ -82,32 +83,43 @@ mod tests {
 
         // Test Database variant
         let rusqlite_err_inner_for_source_check = rusqlite::Error::SqliteFailure(
-            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR), 
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR),
             Some("test db error".to_string()),
         );
         // We need to create the error again for the From conversion if we want to compare the source
         let db_err_marlin = Error::from(rusqlite::Error::SqliteFailure(
-            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR), 
+            rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_ERROR),
             Some("test db error".to_string()),
         ));
-        assert!(db_err_marlin.to_string().contains("Database error: test db error"));
+        assert!(db_err_marlin
+            .to_string()
+            .contains("Database error: test db error"));
         let source = db_err_marlin.source();
         assert!(source.is_some(), "Database error should have a source");
         if let Some(s) = source {
-            assert_eq!(s.to_string(), rusqlite_err_inner_for_source_check.to_string());
+            assert_eq!(
+                s.to_string(),
+                rusqlite_err_inner_for_source_check.to_string()
+            );
         }
 
-
         // Test Watch variant
-        let notify_raw_err_inner_for_source_check = notify::Error::new(notify::ErrorKind::Generic("test watch error".to_string()));
-        let watch_err_marlin = Error::from(notify::Error::new(notify::ErrorKind::Generic("test watch error".to_string())));
-        assert!(watch_err_marlin.to_string().contains("Watch error: test watch error"));
+        let notify_raw_err_inner_for_source_check =
+            notify::Error::new(notify::ErrorKind::Generic("test watch error".to_string()));
+        let watch_err_marlin = Error::from(notify::Error::new(notify::ErrorKind::Generic(
+            "test watch error".to_string(),
+        )));
+        assert!(watch_err_marlin
+            .to_string()
+            .contains("Watch error: test watch error"));
         let source = watch_err_marlin.source();
         assert!(source.is_some(), "Watch error should have a source");
         if let Some(s) = source {
-            assert_eq!(s.to_string(), notify_raw_err_inner_for_source_check.to_string());
+            assert_eq!(
+                s.to_string(),
+                notify_raw_err_inner_for_source_check.to_string()
+            );
         }
-
 
         let invalid_state_err = Error::InvalidState("bad state".to_string());
         assert_eq!(invalid_state_err.to_string(), "Invalid state: bad state");
@@ -133,24 +145,25 @@ mod tests {
             None,
         );
         let db_err_no_msg = Error::from(sqlite_busy_error);
-        
+
         let expected_rusqlite_msg = rusqlite::Error::SqliteFailure(
             rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
             None,
-        ).to_string(); 
-        
+        )
+        .to_string();
+
         let expected_marlin_msg = format!("Database error: {}", expected_rusqlite_msg);
-        
+
         // Verify the string matches the expected format
         assert_eq!(db_err_no_msg.to_string(), expected_marlin_msg);
-        
+
         // Check the error code directly instead of the string
         if let Error::Database(rusqlite::Error::SqliteFailure(err, _)) = &db_err_no_msg {
             assert_eq!(err.code, rusqlite::ffi::ErrorCode::DatabaseBusy);
         } else {
             panic!("Expected Error::Database variant");
         }
-        
+
         // Verify the source exists
         assert!(db_err_no_msg.source().is_some());
     }

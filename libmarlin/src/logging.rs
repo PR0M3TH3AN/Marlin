@@ -9,9 +9,9 @@ pub fn init() {
     // All tracing output (INFO, WARN, ERROR …) now goes to *stderr* so the
     // integration tests can assert on warnings / errors reliably.
     fmt()
-        .with_target(false)        // hide module targets
-        .with_level(true)          // include log level
-        .with_env_filter(filter)   // respect RUST_LOG
+        .with_target(false) // hide module targets
+        .with_level(true) // include log level
+        .with_env_filter(filter) // respect RUST_LOG
         .with_writer(std::io::stderr) // <-- NEW: send to stderr
         .init();
 }
