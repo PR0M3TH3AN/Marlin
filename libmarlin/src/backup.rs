@@ -216,6 +216,19 @@ impl BackupManager {
         Ok(PruneResult { kept, removed })
     }
 
+    pub fn verify_backup(&self, backup_id: &str) -> Result<bool> {
+        let backup_file_path = self.backups_dir.join(backup_id);
+        if !backup_file_path.exists() || !backup_file_path.is_file() {
+            return Err(anyhow::Error::new(marlin_error::Error::NotFound(format!(
+                "Backup file not found or is not a file: {}",
+                backup_file_path.display()
+            ))));
+        }
+        let conn = rusqlite::Connection::open(&backup_file_path)?;
+        let res: String = conn.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
+        Ok(res == "ok")
+    }
+
     pub fn restore_from_backup(&self, backup_id: &str) -> Result<()> {
         let backup_file_path = self.backups_dir.join(backup_id);
         if !backup_file_path.exists() || !backup_file_path.is_file() {
@@ -531,5 +544,19 @@ mod tests {
         let info = &listed[0];
         assert_eq!(info.id, "backup_badformat.db");
         assert_eq!(info.timestamp, expected_ts);
+    }
+
+    #[test]
+    fn verify_backup_ok() {
+        let tmp = tempdir().unwrap();
+        let live_db = tmp.path().join("live_verify.db");
+        let _conn = create_valid_live_db(&live_db);
+
+        let backups_dir = tmp.path().join("ver_backups");
+        let manager = BackupManager::new(&live_db, &backups_dir).unwrap();
+        let info = manager.create_backup().unwrap();
+
+        let ok = manager.verify_backup(&info.id).unwrap();
+        assert!(ok, "expected integrity check to pass");
     }
 }

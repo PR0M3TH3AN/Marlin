@@ -1,6 +1,6 @@
-# Marlin ― Delivery Road-map **v3**
+# Marlin ― Delivery Road-map **v3.2**
 
-*Engineering-ready version — updated 2025-05-17*
+*Engineering-ready version — updated 2025-05-18*
 
 > **Legend**
 > **△** = engineering artefact (spec / ADR / perf target)  **✦** = user-visible deliverable
@@ -39,15 +39,20 @@
 
 ### 2 · Feature cross-matrix (quick look-ups)
 
-| Capability                            | Sprint / Phase | CLI flag or GUI element            | Linked DP |
-| ------------------------------------- | -------------- | ---------------------------------- | --------- |
-| Relationship **templates**            | P7             | `template new`, `template apply`   | DP-008    |
-| Positive / negative filter combinator | P6             | DSL `+tag:foo -tag:bar date>=2025` | DP-007    |
-| ~~Dirty-scan optimisation~~           | ~~E1~~         | ~~`scan --dirty`~~                 | ~~DP-002~~ |
-| Watch-mode                            | E2             | `marlin watch .`                   | DP-003    |
-| Grep snippets                         | P3             | `search -C3 "foo"`                 | DP-004    |
-| Hash / dedupe                         | P4             | `scan --rehash`                    | DP-005    |
 
+| Capability                 | Sprint / Phase | CLI / GUI element    | Linked DP |
+| -------------------------- | -------------- | -------------------- | --------- |
+| Crate split & docs autogen | S0             | —                    | –         |
+| Tarpaulin coverage gate    | S0             | —                    | –         |
+| Watch mode (FS events)     | Epic 1         | `marlin watch .`     | DP‑002    |
+| Backup auto‑prune          | Epic 1         | `backup --prune N`   | –         |
+| Dirty‑scan                 | Epic 2         | `scan --dirty`       | DP‑002    |
+| Grep snippets              | Phase 3        | `search -C3 …`       | DP‑004    |
+| Hash / dedupe              | Phase 4        | `scan --rehash`      | DP‑005    |
+| Tag aliases                | Phase 5        | `tag alias` commands | DP‑006    |
+| Search DSL v2              | Phase 6        | new grammar, `--legacy-search` flag | DP‑007    |
+| Relationship templates     | Phase 7        | `template new/apply` | DP‑008    |
+| TUI v1                     | Phase 8        | `marlin‑tui`         | DP‑009    |
 ---
 
 ## 3 · Milestone acceptance checklist
@@ -65,8 +70,11 @@ Before a milestone is declared “shipped”:
 
 ### 4 · Next immediate actions
 
-~~1. **Write DP-001 (Schema v1.1)** — owner @alice, due 21 May~~  
-~~2. **Set up Tarpaulin & Hyperfine jobs** — @bob, due 23 May~~  
-~~3. **Spike dirty-flag logic** — @carol 2-day time-box, outcome in DP-002~~  
+| # | Task                           | Owner  | Due           |
+| - | ------------------------------ | ------ | ------------- |
+| 1 | Crate split + CI baseline      | @alice | **26 May 25** |
+| 2 | Tarpaulin + Hyperfine jobs     | @bob   | **26 May 25** |
+| 3 | **DP‑001 Schema v1.1** draft   | @carol | **30 May 25** |
+| 4 | backup prune CLI + nightly job | @dave  | **05 Jun 25** |
 
 > *This roadmap now contains both product-level “what” and engineering-level “how/when/prove it”.  It should allow a new contributor to jump in, pick the matching DP, and know exactly the bar they must clear for their code to merge.*  

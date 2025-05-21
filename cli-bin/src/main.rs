@@ -41,7 +41,7 @@ fn main() -> Result<()> {
     let cfg = config::Config::load()?; // resolves DB path
 
     match &args.command {
-        Commands::Init | Commands::Backup | Commands::Restore { .. } => {}
+        Commands::Init | Commands::Backup(_) | Commands::Restore { .. } => {}
         _ => match db::backup(&cfg.db_path) {
             Ok(p) => info!("Pre-command auto-backup created at {}", p.display()),
             Err(e) => error!("Failed to create pre-command auto-backup: {e}"),
@@ -100,9 +100,8 @@ fn main() -> Result<()> {
         Commands::Search { query, exec } => run_search(&conn, &query, exec)?,
 
         /* ---- maintenance ---------------------------------------- */
-        Commands::Backup => {
-            let p = db::backup(&cfg.db_path)?;
-            println!("Backup created: {}", p.display());
+        Commands::Backup(opts) => {
+            cli::backup::run(&opts, &cfg.db_path, &mut conn, args.format)?;
         }
 
         Commands::Restore { backup_path } => {
