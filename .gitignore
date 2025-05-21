@@ -1,54 +1,60 @@
-# === Rust artifacts ===
+# === Rust build artifacts ===
+
 /target/
 /Cargo.lock
 
-# === IDEs & editors ===
+# === IDE & Editor settings ===
+
 .idea/
 .vscode/
-*.swp
-*.swo
-*.bak
-*~
+\*.swp
+\*.swo
+\*.bak
+\*\~
 
 # === OS files ===
-.DS_Store
+
+.DS\_Store
 Thumbs.db
 ehthumbs.db
 desktop.ini
 
-# === Logs and build artifacts ===
-*.log
-*.out
-*.err
+# === Logs & Runtime output ===
 
-# === Marlin-specific ===
-/index.db
-index.db
-*.sqlite
-*.sqlite-wal
-*.sqlite-shm
+\*.log
+\*.out
+\*.err
 
-# === Tests and scratch ===
+# === Coverage reports ===
+
+cobertura.xml
+tarpaulin-report.html
+
+# === Test databases & scratch data ===
+
 /tmp/
-*.test.db
+\*.test.db
 test.db
 
-# === Environment variables and secrets ===
+# === Project databases ===
+
+/index.db
+\*.sqlite
+\*.sqlite-wal
+\*.sqlite-shm
+
+# === Benchmarks & backups ===
+
+/bench/corpus/
+/bench/backups/
+
+# === Environment variables & secrets ===
+
 .env
-.env.*
+.env.\*
 
+# === Other generated files ===
 
-# === Other Files ===
+\*.html
 repo-context.txt
-saved_config.yaml
-
-# === Other Dirs ===
-/bench/corpus
-/bench/backups
-/target/
-/cobertura.xml
-/tarpaulin-report.html
-target/.rustc_info.json
-target/release/marlin
-target/release/marlin.d
-tarpaulin-report.html
+saved\_config.yaml
