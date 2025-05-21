@@ -2,7 +2,7 @@
 //
 // Build script to generate the CLI cheatsheet at compile time.  It
 // parses `src/cli/commands.yaml` and emits a simple Markdown table of
-// commands and flags to `docs/cli_cheatsheet.md`.
+// commands and flags to `cli-bin/docs/cli_cheatsheet.md`.
 
 use std::{fs, path::Path};
 
