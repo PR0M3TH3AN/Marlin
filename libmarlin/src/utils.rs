@@ -12,7 +12,7 @@ use std::path::PathBuf;
 pub fn determine_scan_root(pattern: &str) -> PathBuf {
     // find first wildcard char
     let first_wild = pattern
-        .find(|c| matches!(c, '*' | '?' | '['))
+        .find(|c| ['*', '?', '['].contains(&c))
         .unwrap_or(pattern.len());
 
     // everything up to the wildcard (or the whole string if none)
@@ -21,7 +21,10 @@ pub fn determine_scan_root(pattern: &str) -> PathBuf {
 
     // If there were NO wildcards at all, just return the parent directory
     if first_wild == pattern.len() {
-        return root.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
+        return root
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."));
     }
 
     // Otherwise, if the prefix still has any wildcards (e.g. "foo*/bar"),

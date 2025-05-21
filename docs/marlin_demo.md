@@ -109,7 +109,9 @@ marlin attr set '~/marlin_demo/Reports/*.pdf'          reviewed yes
 ```bash
 marlin search TODO
 marlin search tag:project/md
-marlin search 'tag:logs/app AND ERROR'
+# Content search arrives in Phase 3. For now, grep the logs directly:
+# marlin search 'tag:logs/app AND ERROR'
+grep ERROR ~/marlin_demo/Logs/app.log
 marlin search 'attr:status=complete'
 marlin search 'attr:reviewed=yes AND pdf'
 marlin search 'attr:reviewed=yes' --exec 'xdg-open {}'

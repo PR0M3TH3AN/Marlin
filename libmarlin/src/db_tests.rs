@@ -78,6 +78,32 @@ fn upsert_attr_inserts_and_updates() {
 }
 
 #[test]
+fn file_id_returns_id_and_errors_on_missing() {
+    let conn = open_mem();
+
+    // insert a single file
+    conn.execute(
+        "INSERT INTO files(path, size, mtime) VALUES (?1, 0, 0)",
+        ["exist.txt"],
+    )
+    .unwrap();
+
+    // fetch its id via raw SQL
+    let fid: i64 = conn
+        .query_row("SELECT id FROM files WHERE path='exist.txt'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
+
+    // db::file_id should return the same id for existing paths
+    let looked_up = db::file_id(&conn, "exist.txt").unwrap();
+    assert_eq!(looked_up, fid);
+
+    // querying a missing path should yield an error
+    assert!(db::file_id(&conn, "missing.txt").is_err());
+}
+
+#[test]
 fn add_and_remove_links_and_backlinks() {
     let conn = open_mem();
     // create two files
@@ -92,10 +118,14 @@ fn add_and_remove_links_and_backlinks() {
     )
     .unwrap();
     let src: i64 = conn
-        .query_row("SELECT id FROM files WHERE path='one.txt'", [], |r| r.get(0))
+        .query_row("SELECT id FROM files WHERE path='one.txt'", [], |r| {
+            r.get(0)
+        })
         .unwrap();
     let dst: i64 = conn
-        .query_row("SELECT id FROM files WHERE path='two.txt'", [], |r| r.get(0))
+        .query_row("SELECT id FROM files WHERE path='two.txt'", [], |r| {
+            r.get(0)
+        })
         .unwrap();
 
     // add a link of type "ref"
@@ -169,7 +199,38 @@ fn backup_and_restore_cycle() {
 
     // reopen and check that x.bin survived
     let conn2 = db::open(&db_path).unwrap();
-    let cnt: i64 =
-        conn2.query_row("SELECT COUNT(*) FROM files WHERE path='x.bin'", [], |r| r.get(0)).unwrap();
+    let cnt: i64 = conn2
+        .query_row("SELECT COUNT(*) FROM files WHERE path='x.bin'", [], |r| {
+            r.get(0)
+        })
+        .unwrap();
     assert_eq!(cnt, 1);
+}
+
+mod dirty_helpers {
+    use super::{db, open_mem};
+
+    #[test]
+    fn mark_and_take_dirty_works() {
+        let conn = open_mem();
+        conn.execute(
+            "INSERT INTO files(path, size, mtime) VALUES (?1, 0, 0)",
+            ["dummy.txt"],
+        )
+        .unwrap();
+        let fid: i64 = conn
+            .query_row("SELECT id FROM files WHERE path='dummy.txt'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+
+        db::mark_dirty(&conn, fid).unwrap();
+        db::mark_dirty(&conn, fid).unwrap();
+
+        let dirty = db::take_dirty(&conn).unwrap();
+        assert_eq!(dirty, vec![fid]);
+
+        let empty = db::take_dirty(&conn).unwrap();
+        assert!(empty.is_empty());
+    }
 }

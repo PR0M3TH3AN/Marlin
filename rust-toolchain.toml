@@ -1,0 +1,5 @@
+# rust-toolchain.toml
+[toolchain]
+channel    = "stable"          # or "1.78.0", a specific nightly, etc.
+profile    = "minimal"         # keeps download size small
+components = ["rustfmt", "clippy"]

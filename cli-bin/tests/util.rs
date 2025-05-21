@@ -1,9 +1,9 @@
 //! tests/util.rs
 //! Small helpers shared across integration tests.
 
+use assert_cmd::Command;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
-use assert_cmd::Command; 
 /// Absolute path to the freshly-built `marlin` binary.
 pub fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_marlin"))

@@ -1,15 +1,15 @@
 //! src/cli/link.rs – manage typed relationships between files
 
-use clap::{Subcommand, Args};
+use clap::{Args, Subcommand};
 use rusqlite::Connection;
 
-use crate::cli::Format;   // output selector
-use libmarlin::db;        // ← switched from `crate::db`
+use crate::cli::Format; // output selector
+use libmarlin::db; // ← switched from `crate::db`
 
 #[derive(Subcommand, Debug)]
 pub enum LinkCmd {
     Add(LinkArgs),
-    Rm (LinkArgs),
+    Rm(LinkArgs),
     List(ListArgs),
     Backlinks(BacklinksArgs),
 }
@@ -17,7 +17,7 @@ pub enum LinkCmd {
 #[derive(Args, Debug)]
 pub struct LinkArgs {
     pub from: String,
-    pub to:   String,
+    pub to: String,
     #[arg(long)]
     pub r#type: Option<String>,
 }
@@ -70,7 +70,10 @@ pub fn run(cmd: &LinkCmd, conn: &mut Connection, format: Format) -> anyhow::Resu
             match format {
                 Format::Text => {
                     if let Some(t) = &args.r#type {
-                        println!("Removed link '{}' → '{}' [type='{}']", args.from, args.to, t);
+                        println!(
+                            "Removed link '{}' → '{}' [type='{}']",
+                            args.from, args.to, t
+                        );
                     } else {
                         println!("Removed link '{}' → '{}'", args.from, args.to);
                     }

@@ -1,32 +1,46 @@
 //! Central DB helper – connection bootstrap, migrations **and** most
 //! data-access helpers (tags, links, collections, saved views, …).
 
+mod database;
+pub use database::{Database, IndexOptions};
+
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
-use std::result::Result as StdResult;
 use anyhow::{Context, Result};
 use chrono::Local;
 use rusqlite::{
     backup::{Backup, StepResult},
-    params,
-    Connection,
-    OpenFlags,
-    OptionalExtension,
-    TransactionBehavior,
+    params, Connection, OpenFlags, OptionalExtension, TransactionBehavior,
 };
+use std::result::Result as StdResult;
 use tracing::{debug, info, warn};
 
 /* ─── embedded migrations ─────────────────────────────────────────── */
 
 const MIGRATIONS: &[(&str, &str)] = &[
-    ("0001_initial_schema.sql", include_str!("migrations/0001_initial_schema.sql")),
-    ("0002_update_fts_and_triggers.sql", include_str!("migrations/0002_update_fts_and_triggers.sql")),
-    ("0003_create_links_collections_views.sql", include_str!("migrations/0003_create_links_collections_views.sql")),
-    ("0004_fix_hierarchical_tags_fts.sql", include_str!("migrations/0004_fix_hierarchical_tags_fts.sql")),
-    ("0005_add_dirty_table.sql", include_str!("migrations/0005_add_dirty_table.sql")),
+    (
+        "0001_initial_schema.sql",
+        include_str!("migrations/0001_initial_schema.sql"),
+    ),
+    (
+        "0002_update_fts_and_triggers.sql",
+        include_str!("migrations/0002_update_fts_and_triggers.sql"),
+    ),
+    (
+        "0003_create_links_collections_views.sql",
+        include_str!("migrations/0003_create_links_collections_views.sql"),
+    ),
+    (
+        "0004_fix_hierarchical_tags_fts.sql",
+        include_str!("migrations/0004_fix_hierarchical_tags_fts.sql"),
+    ),
+    (
+        "0005_add_dirty_table.sql",
+        include_str!("migrations/0005_add_dirty_table.sql"),
+    ),
 ];
 
 /* ─── connection bootstrap ────────────────────────────────────────── */
@@ -234,10 +248,7 @@ pub fn list_links(
     Ok(out)
 }
 
-pub fn find_backlinks(
-    conn: &Connection,
-    pattern: &str,
-) -> Result<Vec<(String, Option<String>)>> {
+pub fn find_backlinks(conn: &Connection, pattern: &str) -> Result<Vec<(String, Option<String>)>> {
     let like = pattern.replace('*', "%");
 
     let mut stmt = conn.prepare(
@@ -315,11 +326,9 @@ pub fn list_views(conn: &Connection) -> Result<Vec<(String, String)>> {
 }
 
 pub fn view_query(conn: &Connection, name: &str) -> Result<String> {
-    conn.query_row(
-        "SELECT query FROM views WHERE name = ?1",
-        [name],
-        |r| r.get::<_, String>(0),
-    )
+    conn.query_row("SELECT query FROM views WHERE name = ?1", [name], |r| {
+        r.get::<_, String>(0)
+    })
     .context(format!("no view called '{}'", name))
 }
 

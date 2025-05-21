@@ -1,14 +1,15 @@
 // src/cli.rs
 
-pub mod link;
+pub mod annotate;
 pub mod coll;
-pub mod view;
+pub mod event;
+pub mod link;
+pub mod remind;
 pub mod state;
 pub mod task;
-pub mod remind;
-pub mod annotate;
 pub mod version;
-pub mod event;
+pub mod view;
+pub mod watch;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
@@ -76,9 +77,7 @@ pub enum Commands {
     Backup,
 
     /// Restore from a backup file (overwrites current DB)
-    Restore {
-        backup_path: std::path::PathBuf,
-    },
+    Restore { backup_path: std::path::PathBuf },
 
     /// Generate shell completions (hidden)
     #[command(hide = true)]
@@ -123,10 +122,20 @@ pub enum Commands {
     /// Calendar events & timelines
     #[command(subcommand)]
     Event(event::EventCmd),
+
+    /// Watch directories for changes
+    #[command(subcommand)]
+    Watch(watch::WatchCmd),
 }
 
 #[derive(Subcommand, Debug)]
 pub enum AttrCmd {
-    Set { pattern: String, key: String, value: String },
-    Ls  { path: std::path::PathBuf },
+    Set {
+        pattern: String,
+        key: String,
+        value: String,
+    },
+    Ls {
+        path: std::path::PathBuf,
+    },
 }

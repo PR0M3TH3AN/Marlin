@@ -1,6 +1,6 @@
 // libmarlin/src/facade_tests.rs
 
-use super::*;             // brings Marlin, config, etc.
+use super::*; // brings Marlin, config, etc.
 use std::{env, fs};
 use tempfile::tempdir;
 
@@ -71,4 +71,3 @@ fn open_default_fallback_config() {
     // Clean up
     env::remove_var("HOME");
 }
-

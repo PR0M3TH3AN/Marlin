@@ -78,3 +78,11 @@ Before a milestone is declared **shipped**:
 | 3 | **DP‑001 Schema v1.1** draft   | @carol | **30 May 25** |
 | 4 | backup prune CLI + nightly job | @dave  | **05 Jun 25** |
 
+## CLI Cheatsheet
+
+The full command reference is generated during the build of the CLI. See
+[cli-bin/docs/cli_cheatsheet.md](cli-bin/docs/cli_cheatsheet.md).
+
+## License
+
+Licensed under the [MIT License](LICENSE).
