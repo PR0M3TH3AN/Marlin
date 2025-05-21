@@ -82,3 +82,7 @@ Before a milestone is declared **shipped**:
 
 The full command reference is generated during the build of the CLI. See
 [docs/cli_cheatsheet.md](docs/cli_cheatsheet.md).
+
+## License
+
+Licensed under the [MIT License](LICENSE).
