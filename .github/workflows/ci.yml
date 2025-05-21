@@ -38,6 +38,12 @@ jobs:
       - name: Ensure run_all_tests.sh is executable
         run: chmod +x ./run_all_tests.sh
 
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Lint with Clippy
+        run: cargo clippy -- -D warnings
+
       - name: Run Comprehensive Test Script
         run: ./run_all_tests.sh
 
