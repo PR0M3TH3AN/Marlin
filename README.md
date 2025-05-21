@@ -81,7 +81,7 @@ Before a milestone is declared **shipped**:
 ## CLI Cheatsheet
 
 The full command reference is generated during the build of the CLI. See
-[docs/cli_cheatsheet.md](docs/cli_cheatsheet.md).
+[cli-bin/docs/cli_cheatsheet.md](cli-bin/docs/cli_cheatsheet.md).
 
 ## License
 
