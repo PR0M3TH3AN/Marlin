@@ -107,10 +107,10 @@ fn main() -> Result<()> {
 
         Commands::Restore { backup_path } => {
             drop(conn);
-            if backup_path.exists() {
-                db::restore(&backup_path, &cfg.db_path).with_context(|| {
-                    format!("Failed to restore DB from {}", backup_path.display())
-                })?;
+            if backup_path.exists() {                db::restore(&backup_path, &cfg.db_path)
+                    .with_context(|| {
+                        format!("Failed to restore DB from {}", backup_path.display())
+                    })?;
             } else {
                 let backups_dir = cfg.db_path.parent().unwrap().join("backups");
                 let manager = BackupManager::new(&cfg.db_path, &backups_dir)?;
@@ -118,9 +118,12 @@ fn main() -> Result<()> {
                     .file_name()
                     .and_then(|n| n.to_str())
                     .context("invalid backup file name")?;
-                manager.restore_from_backup(name).with_context(|| {
-                    format!("Failed to restore DB from {}", backup_path.display())
-                })?;
+                manager
+                    .restore_from_backup(name)
+                    .with_context(|| {
+                        format!("Failed to restore DB from {}", backup_path.display())
+                    })?;
+
             }
             println!("Restored DB from {}", backup_path.display());
             db::open(&cfg.db_path).with_context(|| {
