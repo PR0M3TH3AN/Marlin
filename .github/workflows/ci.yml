@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust (stable)
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1.0.7
         with:
           toolchain: stable
           override: true
@@ -82,7 +82,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Rust (nightly for Tarpaulin, if needed)
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1.0.7
         with:
           toolchain: nightly # Or stable if Tarpaulin works well with it for your project
           override: true
