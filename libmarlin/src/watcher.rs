@@ -421,7 +421,7 @@ impl FileWatcher {
                                 };
                                 debouncer.add_event(ProcessedEvent {
                                     path,
-                                    kind: event.kind.clone(),
+                                    kind: event.kind,
                                     priority: prio,
                                     timestamp: Instant::now(),
                                 });
