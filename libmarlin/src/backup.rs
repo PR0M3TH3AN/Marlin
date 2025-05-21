@@ -473,4 +473,27 @@ mod tests {
         let list_res = manager_for_deletion.list_backups().unwrap();
         assert!(list_res.is_empty());
     }
+
+    #[test]
+    fn list_backups_fallback_modification_time() {
+        let tmp = tempdir().unwrap();
+        let live_db = tmp.path().join("live_for_badformat.db");
+        let _conn = create_valid_live_db(&live_db);
+
+        let backups_dir = tmp.path().join("backups_badformat_test");
+        let manager = BackupManager::new(&live_db, &backups_dir).unwrap();
+
+        let bad_backup_path = backups_dir.join("backup_badformat.db");
+        std::fs::write(&bad_backup_path, b"bad").unwrap();
+
+        let metadata = std::fs::metadata(&bad_backup_path).unwrap();
+        let expected_ts = chrono::DateTime::<Utc>::from(metadata.modified().unwrap());
+
+        let listed = manager.list_backups().unwrap();
+        assert_eq!(listed.len(), 1);
+
+        let info = &listed[0];
+        assert_eq!(info.id, "backup_badformat.db");
+        assert_eq!(info.timestamp, expected_ts);
+    }
 }
