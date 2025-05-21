@@ -12,7 +12,7 @@ use std::path::PathBuf;
 pub fn determine_scan_root(pattern: &str) -> PathBuf {
     // find first wildcard char
     let first_wild = pattern
-        .find(|c| matches!(c, '*' | '?' | '['))
+        .find(|c| ['*', '?', '['].contains(&c))
         .unwrap_or(pattern.len());
 
     // everything up to the wildcard (or the whole string if none)

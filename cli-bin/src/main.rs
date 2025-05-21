@@ -16,8 +16,6 @@ use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
 use clap_complete::generate;
 use glob::Pattern;
-use shellexpand;
-use shlex;
 use std::{env, fs, io, path::Path, process::Command};
 use tracing::{debug, error, info};
 use walkdir::WalkDir;
@@ -293,13 +291,11 @@ fn run_search(conn: &rusqlite::Connection, raw_query: &str, exec: Option<String>
 
     if let Some(cmd_tpl) = exec {
         run_exec(&hits, &cmd_tpl)?;
+    } else if hits.is_empty() {
+        eprintln!("No matches for query: `{raw_query}` (FTS expr: `{fts_expr}`)");
     } else {
-        if hits.is_empty() {
-            eprintln!("No matches for query: `{raw_query}` (FTS expr: `{fts_expr}`)");
-        } else {
-            for p in hits {
-                println!("{p}");
-            }
+        for p in hits {
+            println!("{p}");
         }
     }
     Ok(())

@@ -29,12 +29,12 @@ fn generate_cheatsheet() -> Result<(), Box<dyn std::error::Error>> {
             let cmd_name = cmd_name_val.as_str().unwrap_or("");
             if let Value::Mapping(cmd_details) = cmd_details_val {
                 if let Some(Value::Mapping(actions)) =
-                    cmd_details.get(&Value::String("actions".into()))
+                    cmd_details.get(Value::String("actions".into()))
                 {
                     for (action_name_val, action_body_val) in actions {
                         let action_name = action_name_val.as_str().unwrap_or("");
                         let flags = if let Value::Mapping(action_map) = action_body_val {
-                            match action_map.get(&Value::String("flags".into())) {
+                            match action_map.get(Value::String("flags".into())) {
                                 Some(Value::Sequence(seq)) => seq
                                     .iter()
                                     .filter_map(|v| v.as_str())
@@ -48,9 +48,8 @@ fn generate_cheatsheet() -> Result<(), Box<dyn std::error::Error>> {
 
                         let flags_disp = if flags.is_empty() { "—" } else { &flags };
                         table.push_str(&format!(
-                            "| `{}` | {} |\n",
-                            format!("{} {}", cmd_name, action_name),
-                            flags_disp
+                            "| `{} {}` | {} |\n",
+                            cmd_name, action_name, flags_disp
                         ));
                     }
                 }
