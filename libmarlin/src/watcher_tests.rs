@@ -40,7 +40,7 @@ mod tests {
             .expect("Failed to create watcher");
 
         watcher.start().expect("Failed to start watcher");
-        assert_eq!(watcher.status().state, WatcherState::Watching);
+        assert_eq!(watcher.status().unwrap().state, WatcherState::Watching);
 
         thread::sleep(Duration::from_millis(200));
         let new_file_path = temp_path.join("new_file.txt");
@@ -63,8 +63,8 @@ mod tests {
         thread::sleep(Duration::from_millis(500));
         watcher.stop().expect("Failed to stop watcher");
 
-        assert_eq!(watcher.status().state, WatcherState::Stopped);
-        assert!(watcher.status().events_processed > 0, "Expected some file events to be processed");
+        assert_eq!(watcher.status().unwrap().state, WatcherState::Stopped);
+        assert!(watcher.status().unwrap().events_processed > 0, "Expected some file events to be processed");
     }
 
     #[test]

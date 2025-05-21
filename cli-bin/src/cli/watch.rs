@@ -56,8 +56,8 @@ pub fn run(cmd: &WatchCmd, _conn: &mut Connection, _format: super::Format) -> Re
             info!("Starting watcher for directory: {}", canon_path.display());
 
             let mut watcher = marlin.watch(&canon_path, Some(config))?;
-            
-            let status = watcher.status();
+
+            let status = watcher.status()?;
             info!("Watcher started. Press Ctrl+C to stop watching.");
             info!("Watching {} paths", status.watched_paths.len());
             
@@ -73,7 +73,7 @@ pub fn run(cmd: &WatchCmd, _conn: &mut Connection, _format: super::Format) -> Re
 
             info!("Watcher run loop started. Waiting for Ctrl+C or stop signal...");
             while running.load(Ordering::SeqCst) {
-                let current_status = watcher.status();
+                let current_status = watcher.status()?;
                 if current_status.state == WatcherState::Stopped {
                     info!("Watcher has stopped (detected by state). Exiting loop.");
                     break;
@@ -98,7 +98,7 @@ pub fn run(cmd: &WatchCmd, _conn: &mut Connection, _format: super::Format) -> Re
             watcher.stop()?;
             {
                 let mut guard = LAST_WATCHER_STATE.lock().unwrap();
-                *guard = Some(watcher.status().state);
+                *guard = Some(watcher.status()?.state);
             }
             info!("Watcher instance fully stopped.");
             Ok(())

@@ -199,7 +199,7 @@ impl Marlin {
         let watcher_db = Arc::new(Mutex::new(db::Database::new(new_conn)));
         
         let mut owned_w = watcher::FileWatcher::new(vec![p], cfg)?;
-        owned_w.with_database(watcher_db); // Modifies owned_w in place
+        owned_w.with_database(watcher_db)?; // Modifies owned_w in place
         owned_w.start()?; // Start the watcher after it has been fully configured
         
         Ok(owned_w) // Return the owned FileWatcher
