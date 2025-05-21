@@ -129,7 +129,7 @@ fn test_basic_watch_functionality() {
     let finished_watcher = watcher_thread.join().expect("Watcher thread panicked");
     
     // Check status after processing events
-    let status = finished_watcher.status();
+    let status = finished_watcher.status().unwrap();
     
     // Assertions
     assert_eq!(status.state, WatcherState::Stopped);
@@ -190,7 +190,7 @@ fn test_debouncing() {
     
     // Complete the test
     let finished_watcher = watcher_thread.join().expect("Watcher thread panicked");
-    let status = finished_watcher.status();
+    let status = finished_watcher.status().unwrap();
     
     // We should have processed fewer events than modifications made
     // due to debouncing (exact count depends on implementation details)
@@ -248,7 +248,7 @@ fn test_event_flood() {
     
     // Complete the test
     let finished_watcher = watcher_thread.join().expect("Watcher thread panicked");
-    let status = finished_watcher.status();
+    let status = finished_watcher.status().unwrap();
     
     // Verify processing occurred
     assert!(status.events_processed > 0, "Expected events to be processed");
@@ -355,7 +355,7 @@ fn test_graceful_shutdown() {
             "Shutdown took too long");
     
     // Verify final state
-    let status = watcher.status();
+    let status = watcher.status().unwrap();
     assert_eq!(status.state, WatcherState::Stopped);
     assert_eq!(status.queue_size, 0, "Queue should be empty after shutdown");
     
