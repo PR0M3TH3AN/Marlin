@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+use tracing::info;
 
 /// Configuration for the file watcher
 #[derive(Debug, Clone)]
@@ -430,7 +431,7 @@ impl FileWatcher {
                     if let Some(db_mutex) = &*db_guard_option {
                         if let Ok(mut _db_instance_guard) = db_mutex.lock() {
                             for event_item in &evts_to_process {
-                                 println!(
+                                 info!(
                                     "Processing event (DB available): {:?} for path {:?}",
                                     event_item.kind, event_item.path
                                 );
@@ -440,7 +441,7 @@ impl FileWatcher {
                         }
                     } else {
                         for event_item in &evts_to_process {
-                             println!( 
+                             info!(
                                 "Processing event (no DB): {:?} for path {:?}",
                                 event_item.kind, event_item.path
                             );
@@ -454,7 +455,7 @@ impl FileWatcher {
                 let final_evts = debouncer.flush();
                 events_processed_clone.fetch_add(final_evts.len(), Ordering::SeqCst);
                 for processed_event in final_evts {
-                    println!(
+                    info!(
                         "Processing final event: {:?} for path {:?}",
                         processed_event.kind, processed_event.path
                     );
