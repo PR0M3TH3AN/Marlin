@@ -35,12 +35,15 @@ impl Config {
         let digest = h.finish(); // 64-bit
         let file_name = format!("index_{digest:016x}.db");
 
-        if let Some(dirs) = ProjectDirs::from("io", "Marlin", "marlin") {
-            let dir = dirs.data_dir();
-            std::fs::create_dir_all(dir)?;
-            return Ok(Self {
-                db_path: dir.join(file_name),
-            });
+        // If HOME and XDG_DATA_HOME are missing we can't resolve an XDG path
+        if std::env::var_os("HOME").is_some() || std::env::var_os("XDG_DATA_HOME").is_some() {
+            if let Some(dirs) = ProjectDirs::from("io", "Marlin", "marlin") {
+                let dir = dirs.data_dir();
+                std::fs::create_dir_all(dir)?;
+                return Ok(Self {
+                    db_path: dir.join(file_name),
+                });
+            }
         }
 
         // 3) very last resort – workspace-relative DB
