@@ -6,7 +6,7 @@
 //! (create, modify, delete) using the `notify` crate. It implements event debouncing,
 //! batch processing, and a state machine for robust lifecycle management.
 
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use crate::db::Database;
 use crossbeam_channel::{bounded, Receiver};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcherTrait};
@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
+use tracing::info;
 
 /// Configuration for the file watcher
 #[derive(Debug, Clone)]
@@ -430,20 +431,14 @@ impl FileWatcher {
                     if let Some(db_mutex) = &*db_guard_option {
                         if let Ok(mut _db_instance_guard) = db_mutex.lock() {
                             for event_item in &evts_to_process {
-                                 println!(
-                                    "Processing event (DB available): {:?} for path {:?}",
-                                    event_item.kind, event_item.path
-                                );
+                                info!(?event_item.kind, path = ?event_item.path, "Processing event (DB available)");
                             }
                         } else {
                             eprintln!("db mutex poisoned");
                         }
                     } else {
                         for event_item in &evts_to_process {
-                             println!( 
-                                "Processing event (no DB): {:?} for path {:?}",
-                                event_item.kind, event_item.path
-                            );
+                            info!(?event_item.kind, path = ?event_item.path, "Processing event (no DB)");
                         }
                     }
                 }
@@ -454,10 +449,7 @@ impl FileWatcher {
                 let final_evts = debouncer.flush();
                 events_processed_clone.fetch_add(final_evts.len(), Ordering::SeqCst);
                 for processed_event in final_evts {
-                    println!(
-                        "Processing final event: {:?} for path {:?}",
-                        processed_event.kind, processed_event.path
-                    );
+                    info!(?processed_event.kind, path = ?processed_event.path, "Processing final event");
                 }
             }
             if let Ok(mut final_state_guard) = state_clone.lock() {
