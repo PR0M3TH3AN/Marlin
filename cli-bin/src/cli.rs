@@ -1,6 +1,7 @@
 // src/cli.rs
 
 pub mod annotate;
+pub mod backup;
 pub mod coll;
 pub mod event;
 pub mod link;
@@ -73,8 +74,8 @@ pub enum Commands {
         exec: Option<String>,
     },
 
-    /// Create a timestamped backup of the database
-    Backup,
+    /// Create or manage database backups
+    Backup(backup::BackupOpts),
 
     /// Restore from a backup file (overwrites current DB)
     Restore { backup_path: std::path::PathBuf },

@@ -21,3 +21,4 @@
 | `version diff` | — |
 | `event add` | — |
 | `event timeline` | — |
+| `backup run` | --dir, --prune, --verify, --file |
