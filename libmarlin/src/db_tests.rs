@@ -197,3 +197,29 @@ fn backup_and_restore_cycle() {
         conn2.query_row("SELECT COUNT(*) FROM files WHERE path='x.bin'", [], |r| r.get(0)).unwrap();
     assert_eq!(cnt, 1);
 }
+
+mod dirty_helpers {
+    use super::{db, open_mem};
+
+    #[test]
+    fn mark_and_take_dirty_works() {
+        let conn = open_mem();
+        conn.execute(
+            "INSERT INTO files(path, size, mtime) VALUES (?1, 0, 0)",
+            ["dummy.txt"],
+        )
+        .unwrap();
+        let fid: i64 = conn
+            .query_row("SELECT id FROM files WHERE path='dummy.txt'", [], |r| r.get(0))
+            .unwrap();
+
+        db::mark_dirty(&conn, fid).unwrap();
+        db::mark_dirty(&conn, fid).unwrap();
+
+        let dirty = db::take_dirty(&conn).unwrap();
+        assert_eq!(dirty, vec![fid]);
+
+        let empty = db::take_dirty(&conn).unwrap();
+        assert!(empty.is_empty());
+    }
+}
