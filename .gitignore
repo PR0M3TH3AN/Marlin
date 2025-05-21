@@ -58,3 +58,6 @@ test.db
 \*.html
 repo-context.txt
 saved\_config.yaml
+bench/dirty-vs-full.md
+bench/index.db
+bench/dirty-vs-full.md
