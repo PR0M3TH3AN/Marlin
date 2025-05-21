@@ -78,6 +78,30 @@ fn upsert_attr_inserts_and_updates() {
 }
 
 #[test]
+fn file_id_returns_id_and_errors_on_missing() {
+    let conn = open_mem();
+
+    // insert a single file
+    conn.execute(
+        "INSERT INTO files(path, size, mtime) VALUES (?1, 0, 0)",
+        ["exist.txt"],
+    )
+    .unwrap();
+
+    // fetch its id via raw SQL
+    let fid: i64 = conn
+        .query_row("SELECT id FROM files WHERE path='exist.txt'", [], |r| r.get(0))
+        .unwrap();
+
+    // db::file_id should return the same id for existing paths
+    let looked_up = db::file_id(&conn, "exist.txt").unwrap();
+    assert_eq!(looked_up, fid);
+
+    // querying a missing path should yield an error
+    assert!(db::file_id(&conn, "missing.txt").is_err());
+}
+
+#[test]
 fn add_and_remove_links_and_backlinks() {
     let conn = open_mem();
     // create two files
