@@ -37,7 +37,6 @@ use std::{fs, path::Path, sync::{Arc, Mutex}};
 
 /// Main handle for interacting with a Marlin database.
 pub struct Marlin {
-    #[allow(dead_code)]
     cfg: config::Config,
     conn: Connection,
 }

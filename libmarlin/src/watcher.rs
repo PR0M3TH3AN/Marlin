@@ -16,7 +16,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-// REMOVED: use std::fs; // <<<<<<<<<<<< THIS LINE WAS REMOVED
 
 /// Configuration for the file watcher
 #[derive(Debug, Clone)]
@@ -127,7 +126,6 @@ impl EventDebouncer {
         events
     }
 
-    #[allow(dead_code)]
     fn len(&self) -> usize {
         self.events.len()
     }
@@ -318,13 +316,10 @@ mod event_debouncer_tests {
 
 pub struct FileWatcher {
     state: Arc<Mutex<WatcherState>>,
-    #[allow(dead_code)]
-    config: WatcherConfig,
+    _config: WatcherConfig,
     watched_paths: Vec<PathBuf>,
-    #[allow(dead_code)]
-    event_receiver: Receiver<std::result::Result<Event, notify::Error>>,
-    #[allow(dead_code)] 
-    watcher: RecommendedWatcher,
+    _event_receiver: Receiver<std::result::Result<Event, notify::Error>>,
+    _watcher: RecommendedWatcher,
     processor_thread: Option<JoinHandle<()>>,
     stop_flag: Arc<AtomicBool>,
     events_processed: Arc<AtomicUsize>,
@@ -456,10 +451,10 @@ impl FileWatcher {
 
         Ok(Self {
             state,
-            config,
+            _config: config,
             watched_paths: paths,
-            event_receiver: rx,
-            watcher: actual_watcher,
+            _event_receiver: rx,
+            _watcher: actual_watcher,
             processor_thread: Some(processor_thread),
             stop_flag,
             events_processed,
