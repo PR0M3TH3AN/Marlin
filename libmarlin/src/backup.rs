@@ -136,50 +136,42 @@ impl BackupManager {
                 if let Some(filename_osstr) = path.file_name() {
                     if let Some(filename) = filename_osstr.to_str() {
                         if filename.starts_with("backup_") && filename.ends_with(".db") {
+                            let metadata = fs::metadata(&path).with_context(|| {
+                                format!("Failed to get metadata for {}", path.display())
+                            })?;
+
                             let ts_str = filename
                                 .trim_start_matches("backup_")
                                 .trim_end_matches(".db");
 
-                            let naive_dt =
-                                match NaiveDateTime::parse_from_str(ts_str, "%Y-%m-%d_%H-%M-%S_%f")
-                                {
-                                    Ok(dt) => dt,
-                                    Err(_) => match NaiveDateTime::parse_from_str(
-                                        ts_str,
-                                        "%Y-%m-%d_%H-%M-%S",
-                                    ) {
-                                        Ok(dt) => dt,
-                                        Err(_) => {
-                                            let metadata =
-                                                fs::metadata(&path).with_context(|| {
-                                                    format!(
-                                                        "Failed to get metadata for {}",
-                                                        path.display()
-                                                    )
-                                                })?;
-                                            DateTime::<Utc>::from(metadata.modified()?).naive_utc()
+                            let parsed_dt =
+                                NaiveDateTime::parse_from_str(ts_str, "%Y-%m-%d_%H-%M-%S_%f")
+                                    .or_else(|_| {
+                                        NaiveDateTime::parse_from_str(ts_str, "%Y-%m-%d_%H-%M-%S")
+                                    });
+
+                            let timestamp_utc = match parsed_dt {
+                                Ok(naive_dt) => {
+                                    let local_dt_result = Local.from_local_datetime(&naive_dt);
+                                    let local_dt = match local_dt_result {
+                                        chrono::LocalResult::Single(dt) => dt,
+                                        chrono::LocalResult::Ambiguous(dt1, _dt2) => {
+                                            eprintln!("Warning: Ambiguous local time for backup {}, taking first interpretation.", filename);
+                                            dt1
                                         }
-                                    },
-                                };
-
-                            let local_dt_result = Local.from_local_datetime(&naive_dt);
-                            let local_dt = match local_dt_result {
-                                chrono::LocalResult::Single(dt) => dt,
-                                chrono::LocalResult::Ambiguous(dt1, _dt2) => {
-                                    eprintln!("Warning: Ambiguous local time for backup {}, taking first interpretation.", filename);
-                                    dt1
+                                        chrono::LocalResult::None => {
+                                            eprintln!(
+                                                "Warning: Invalid local time for backup {}, skipping.",
+                                                filename
+                                            );
+                                            continue;
+                                        }
+                                    };
+                                    DateTime::<Utc>::from(local_dt)
                                 }
-                                chrono::LocalResult::None => {
-                                    eprintln!(
-                                        "Warning: Invalid local time for backup {}, skipping.",
-                                        filename
-                                    );
-                                    continue;
-                                }
+                                Err(_) => DateTime::<Utc>::from(metadata.modified()?),
                             };
-                            let timestamp_utc = DateTime::<Utc>::from(local_dt);
 
-                            let metadata = fs::metadata(&path)?;
                             backup_infos.push(BackupInfo {
                                 id: filename.to_string(),
                                 timestamp: timestamp_utc,
