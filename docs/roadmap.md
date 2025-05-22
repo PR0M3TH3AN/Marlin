@@ -46,7 +46,7 @@
 | Tarpaulin coverage gate    | S0             | —                    | –         |
 | Watch mode (FS events)     | Epic 1         | `marlin watch .`     | DP‑002    |
 | Backup auto‑prune          | Epic 1         | `backup --prune N`   | –         |
-| Rename/move tracking     | Epic 2         | automatic path update | – |
+| Rename/move tracking     | Epic 2         | automatic path update | Spec‑RMH |
 | Dirty‑scan                 | Epic 2         | `scan --dirty`       | DP‑002    |
 | Grep snippets              | Phase 3        | `search -C3 …`       | DP‑004    |
 | Hash / dedupe              | Phase 4        | `scan --rehash`      | DP‑005    |
