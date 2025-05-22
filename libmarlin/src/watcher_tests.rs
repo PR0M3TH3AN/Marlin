@@ -7,6 +7,7 @@ mod tests {
     // These are still from the watcher module
     use crate::db::open as open_marlin_db;
     use crate::watcher::{FileWatcher, WatcherConfig, WatcherState}; // Use your project's DB open function
+    use crate::Marlin;
 
     use std::fs::{self, File};
     use std::io::Write;
@@ -142,6 +143,88 @@ mod tests {
                 "Kept backup file {} should exist",
                 kept_info.id
             );
+        }
+    }
+
+    #[test]
+    fn rename_file_updates_db() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path();
+        let file = dir.join("a.txt");
+        fs::write(&file, b"hi").unwrap();
+        let db_path = dir.join("test.db");
+        let mut marlin = Marlin::open_at(&db_path).unwrap();
+        marlin.scan(&[dir]).unwrap();
+
+        let mut watcher = marlin
+            .watch(
+                dir,
+                Some(WatcherConfig {
+                    debounce_ms: 50,
+                    ..Default::default()
+                }),
+            )
+            .unwrap();
+
+        thread::sleep(Duration::from_millis(100));
+        let new_file = dir.join("b.txt");
+        fs::rename(&file, &new_file).unwrap();
+        thread::sleep(Duration::from_millis(200));
+        watcher.stop().unwrap();
+
+        let count: i64 = marlin
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM files WHERE path = ?1",
+                [new_file.to_string_lossy()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn rename_directory_updates_children() {
+        let tmp = tempdir().unwrap();
+        let dir = tmp.path();
+        let sub = dir.join("old");
+        fs::create_dir(&sub).unwrap();
+        let f1 = sub.join("one.txt");
+        fs::write(&f1, b"1").unwrap();
+        let f2 = sub.join("two.txt");
+        fs::write(&f2, b"2").unwrap();
+
+        let db_path = dir.join("test2.db");
+        let mut marlin = Marlin::open_at(&db_path).unwrap();
+        marlin.scan(&[dir]).unwrap();
+
+        let mut watcher = marlin
+            .watch(
+                dir,
+                Some(WatcherConfig {
+                    debounce_ms: 50,
+                    ..Default::default()
+                }),
+            )
+            .unwrap();
+
+        thread::sleep(Duration::from_millis(100));
+        let new = dir.join("newdir");
+        fs::rename(&sub, &new).unwrap();
+        thread::sleep(Duration::from_millis(300));
+        watcher.stop().unwrap();
+
+        for fname in ["one.txt", "two.txt"] {
+            let p = new.join(fname);
+            let cnt: i64 = marlin
+                .conn()
+                .query_row(
+                    "SELECT COUNT(*) FROM files WHERE path = ?1",
+                    [p.to_string_lossy()],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(cnt, 1, "{} missing", p.display());
         }
     }
 }
