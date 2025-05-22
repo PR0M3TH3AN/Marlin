@@ -21,7 +21,7 @@ use tracing::{debug, info, warn};
 /* ─── schema version ───────────────────────────────────────────────── */
 
 /// Current library schema version.
-pub const SCHEMA_VERSION: i32 = 1_1;
+pub const SCHEMA_VERSION: i32 = MIGRATIONS.len() as i32;
 
 /* ─── embedded migrations ─────────────────────────────────────────── */
 
