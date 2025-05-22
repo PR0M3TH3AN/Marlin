@@ -520,15 +520,16 @@ impl FileWatcher {
             let _ = h.join();
         }
 
-        *self
-            .state
-            .lock()
-            .map_err(|_| anyhow::anyhow!("state"))? = WatcherState::Stopped;
+        *self.state.lock().map_err(|_| anyhow::anyhow!("state"))? = WatcherState::Stopped;
         Ok(())
     }
 
     pub fn status(&self) -> Result<WatcherStatus> {
-        let st = self.state.lock().map_err(|_| anyhow::anyhow!("state"))?.clone();
+        let st = self
+            .state
+            .lock()
+            .map_err(|_| anyhow::anyhow!("state"))?
+            .clone();
         Ok(WatcherStatus {
             state: st,
             events_processed: self.events_processed.load(Ordering::SeqCst),
