@@ -1,11 +1,13 @@
 // libmarlin/src/facade_tests.rs
 
 use super::*; // brings Marlin, config, etc.
+use crate::test_utils::ENV_MUTEX;
 use std::{env, fs};
 use tempfile::tempdir;
 
 #[test]
 fn open_at_and_scan_and_search() {
+    let _guard = ENV_MUTEX.lock().unwrap();
     // 1) Prepare a temp workspace with one file
     let tmp = tempdir().unwrap();
     let file = tmp.path().join("hello.txt");
@@ -33,6 +35,7 @@ fn open_at_and_scan_and_search() {
 
 #[test]
 fn tag_and_search_by_tag() {
+    let _guard = ENV_MUTEX.lock().unwrap();
     let tmp = tempdir().unwrap();
     let a = tmp.path().join("a.md");
     let b = tmp.path().join("b.md");
@@ -56,6 +59,7 @@ fn tag_and_search_by_tag() {
 
 #[test]
 fn open_default_fallback_config() {
+    let _guard = ENV_MUTEX.lock().unwrap();
     // Unset all overrides
     env::remove_var("MARLIN_DB_PATH");
     env::remove_var("XDG_DATA_HOME");

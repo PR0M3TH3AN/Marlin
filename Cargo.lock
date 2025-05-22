@@ -633,6 +633,7 @@ dependencies = [
  "crossbeam-channel",
  "directories",
  "glob",
+ "lazy_static",
  "notify",
  "priority-queue",
  "rusqlite",
