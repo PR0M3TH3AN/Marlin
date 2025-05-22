@@ -41,6 +41,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0005_add_dirty_table.sql",
         include_str!("migrations/0005_add_dirty_table.sql"),
     ),
+    (
+        "0006_drop_tags_canonical_id.sql",
+        include_str!("migrations/0006_drop_tags_canonical_id.sql"),
+    ),
 ];
 
 /* ─── connection bootstrap ────────────────────────────────────────── */
