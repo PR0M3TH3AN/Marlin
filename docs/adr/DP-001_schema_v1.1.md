@@ -8,14 +8,14 @@
 
 We’ve landed a basic SQLite-backed `files` table and a contentless FTS5 index. Before we build out higher-level features, we need to lock down our **v1.1** metadata schema for:
 
-- **Hierarchical tags** (`tags` + `file_tags`) – optional `canonical_id` for aliases
+- **Hierarchical tags** (`tags` + `file_tags`) – alias resolution handled at query time
 - **Custom attributes** (`attributes`)
 - **File-to-file relationships** (`links`)
 - **Named collections** (`collections` + `collection_files`)
 - **Views** (`views`)
 
-Locking this schema now lets downstream CLI & GUI work against a stable model and ensures our migrations stay easy to reason about.  
-Tags optionally reference a canonical tag via the `canonical_id` column.
+Locking this schema now lets downstream CLI & GUI work against a stable model and ensures our migrations stay easy to reason about.
+Alias relationships are resolved outside the table itself; there is no `canonical_id` column.
 
 ## 2. Decision
 
@@ -58,7 +58,6 @@ entity tags {
   --
     name      : TEXT
     parent_id : INTEGER <<FK>>
-    canonical_id : INTEGER <<FK>>
 }
 
 entity file_tags {
@@ -151,6 +150,7 @@ Or in plain-ASCII:
 | **0003\_create\_links\_collections\_views.sql** | Add `links`, `collections`, `collection_files`, `views` |
 | **0004\_fix\_hierarchical\_tags\_fts.sql**             | Recursive CTE for full tag-path indexing in FTS triggers      |
 | **0005_add_dirty_table.sql**                           | Track modified files needing reindexing |
+| **0006_drop_tags_canonical_id.sql**                   | Remove legacy `canonical_id` column from `tags` |
 
 ### Performance-Critical Indexes
 
