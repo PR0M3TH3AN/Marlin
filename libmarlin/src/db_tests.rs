@@ -234,3 +234,55 @@ mod dirty_helpers {
         assert!(empty.is_empty());
     }
 }
+
+#[test]
+fn tables_exist_and_fts_triggers() {
+    use super::Marlin;
+    use std::fs;
+
+    let tmp = tempdir().unwrap();
+    let db_path = tmp.path().join("test.db");
+    let mut marlin = Marlin::open_at(&db_path).unwrap();
+
+    // the DB file should exist after opening
+    assert!(db_path.exists());
+
+    // confirm required tables
+    for table in ["links", "collections", "collection_files", "views"] {
+        let cnt: i64 = marlin
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                [table],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(cnt, 1, "missing table {table}");
+    }
+
+    // create a file to index
+    let file_dir = tmp.path().join("files");
+    fs::create_dir(&file_dir).unwrap();
+    let file_path = file_dir.join("sample.txt");
+    fs::write(&file_path, "hello world").unwrap();
+
+    // index via public helper
+    marlin.scan(&[&file_dir]).unwrap();
+    marlin.tag("*.txt", "foo/bar").unwrap();
+
+    let fid = db::file_id(marlin.conn(), file_path.to_str().unwrap()).unwrap();
+    db::upsert_attr(marlin.conn(), fid, "color", "blue").unwrap();
+
+    let row: (String, String, String) = marlin
+        .conn()
+        .query_row(
+            "SELECT path, tags_text, attrs_text FROM files_fts WHERE rowid = ?1",
+            [fid],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+
+    assert_eq!(row.0, file_path.to_str().unwrap());
+    assert!(row.1.contains("foo") && row.1.contains("bar"));
+    assert_eq!(row.2, "color=blue");
+}
