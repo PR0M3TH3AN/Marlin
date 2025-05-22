@@ -73,9 +73,9 @@ Before a milestone is declared “shipped”:
 
 | # | Task                           | Owner  | Due           |
 | - | ------------------------------ | ------ | ------------- |
-| 1 | Crate split + CI baseline      | @alice | **26 May 25** |
-| 2 | Tarpaulin + Hyperfine jobs     | @bob   | **26 May 25** |
+| ~~1~~ | ~~Crate split + CI baseline~~      | @alice | ~~26 May 25~~ |
+| ~~2~~ | ~~Tarpaulin + Hyperfine jobs~~     | @bob   | ~~26 May 25~~ |
 | 3 | **DP‑001 Schema v1.1** draft   | @carol | **30 May 25** |
-| 4 | backup prune CLI + nightly job | @dave  | **05 Jun 25** |
+| ~~4~~ | ~~backup prune CLI + nightly job~~ | @dave  | ~~05 Jun 25~~ |
 
 > *This roadmap now contains both product-level “what” and engineering-level “how/when/prove it”.  It should allow a new contributor to jump in, pick the matching DP, and know exactly the bar they must clear for their code to merge.*  
