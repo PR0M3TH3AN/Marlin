@@ -52,109 +52,106 @@ fn main() -> Result<()> {
     /* ── open DB (runs migrations) ───────────────────────────── */
     let mut conn = db::open(&cfg.db_path)?;
 
-/* ── command dispatch ────────────────────────────────────── */
-match args.command {
-    Commands::Completions { .. } => {} // handled above
+    /* ── command dispatch ────────────────────────────────────── */
+    match args.command {
+        Commands::Completions { .. } => {} // handled above
 
-    /* ---- init ------------------------------------------------ */
-    Commands::Init => {
-        info!("Database initialised at {}", cfg.db_path.display());
-        let cwd = env::current_dir().context("getting current directory")?;
-        let count =
-            scan::scan_directory(&mut conn, &cwd).context("initial scan failed")?;
-        info!("Initial scan complete – indexed/updated {count} files");
-    }
-
-    /* ---- scan ------------------------------------------------ */
-    Commands::Scan { dirty, paths } => {
-        let scan_paths: Vec<std::path::PathBuf> = if paths.is_empty() {
-            vec![env::current_dir()?]
-        } else {
-            paths.into_iter().collect()
-        };
-
-        if dirty {
-            let dirty_ids = take_dirty(&conn)?;
-            for id in dirty_ids {
-                let path: String = conn.query_row(
-                    "SELECT path FROM files WHERE id = ?1",
-                    [id],
-                    |r| r.get(0),
-                )?;
-                scan::scan_directory(&mut conn, Path::new(&path))?;
-            }
-        } else {
-            for p in scan_paths {
-                scan::scan_directory(&mut conn, &p)?;
-            }
-        }
-    }
-
-    /* ---- tag / attribute / search --------------------------- */
-    Commands::Tag { pattern, tag_path } => apply_tag(&conn, &pattern, &tag_path)?,
-
-    Commands::Attr { action } => match action {
-        cli::AttrCmd::Set {
-            pattern,
-            key,
-            value,
-        } => attr_set(&conn, &pattern, &key, &value)?,
-        cli::AttrCmd::Ls { path } => attr_ls(&conn, &path)?,
-    },
-
-    Commands::Search { query, exec } => run_search(&conn, &query, exec)?,
-
-    /* ---- maintenance ---------------------------------------- */
-    Commands::Backup(opts) => {
-        cli::backup::run(&opts, &cfg.db_path, &mut conn, args.format)?;
-    }
-
-    Commands::Restore { backup_path } => {
-        drop(conn); // close connection so the restore can overwrite the DB file
-
-        if backup_path.exists() {
-            // User pointed to an actual backup file on disk
-            db::restore(&backup_path, &cfg.db_path).with_context(|| {
-                format!("Failed to restore DB from {}", backup_path.display())
-            })?;
-        } else {
-            // Assume they passed just the file-name that lives in the standard backups dir
-            let backups_dir = cfg.db_path.parent().unwrap().join("backups");
-            let manager = BackupManager::new(&cfg.db_path, &backups_dir)?;
-
-            let name = backup_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .context("invalid backup file name")?;
-
-            manager.restore_from_backup(name).with_context(|| {
-                format!("Failed to restore DB from {}", backup_path.display())
-            })?;
+        /* ---- init ------------------------------------------------ */
+        Commands::Init => {
+            info!("Database initialised at {}", cfg.db_path.display());
+            let cwd = env::current_dir().context("getting current directory")?;
+            let count = scan::scan_directory(&mut conn, &cwd).context("initial scan failed")?;
+            info!("Initial scan complete – indexed/updated {count} files");
         }
 
-        println!("Restored DB from {}", backup_path.display());
+        /* ---- scan ------------------------------------------------ */
+        Commands::Scan { dirty, paths } => {
+            let scan_paths: Vec<std::path::PathBuf> = if paths.is_empty() {
+                vec![env::current_dir()?]
+            } else {
+                paths.into_iter().collect()
+            };
 
-        // Re-open so the rest of the program talks to the fresh database
-        db::open(&cfg.db_path).with_context(|| {
-            format!("Could not open restored DB at {}", cfg.db_path.display())
-        })?;
-        info!("Successfully opened restored database.");
+            if dirty {
+                let dirty_ids = take_dirty(&conn)?;
+                for id in dirty_ids {
+                    let path: String =
+                        conn.query_row("SELECT path FROM files WHERE id = ?1", [id], |r| r.get(0))?;
+                    scan::scan_directory(&mut conn, Path::new(&path))?;
+                }
+            } else {
+                for p in scan_paths {
+                    scan::scan_directory(&mut conn, &p)?;
+                }
+            }
+        }
+
+        /* ---- tag / attribute / search --------------------------- */
+        Commands::Tag { pattern, tag_path } => apply_tag(&conn, &pattern, &tag_path)?,
+
+        Commands::Attr { action } => match action {
+            cli::AttrCmd::Set {
+                pattern,
+                key,
+                value,
+            } => attr_set(&conn, &pattern, &key, &value)?,
+            cli::AttrCmd::Ls { path } => attr_ls(&conn, &path)?,
+        },
+
+        Commands::Search { query, exec } => run_search(&conn, &query, exec)?,
+
+        /* ---- maintenance ---------------------------------------- */
+        Commands::Backup(opts) => {
+            cli::backup::run(&opts, &cfg.db_path, &mut conn, args.format)?;
+        }
+
+        Commands::Restore { backup_path } => {
+            drop(conn); // close connection so the restore can overwrite the DB file
+
+            if backup_path.exists() {
+                // User pointed to an actual backup file on disk
+                db::restore(&backup_path, &cfg.db_path).with_context(|| {
+                    format!("Failed to restore DB from {}", backup_path.display())
+                })?;
+            } else {
+                // Assume they passed just the file-name that lives in the standard backups dir
+                let backups_dir = cfg.db_path.parent().unwrap().join("backups");
+                let manager = BackupManager::new(&cfg.db_path, &backups_dir)?;
+
+                let name = backup_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .context("invalid backup file name")?;
+
+                manager.restore_from_backup(name).with_context(|| {
+                    format!("Failed to restore DB from {}", backup_path.display())
+                })?;
+            }
+
+            println!("Restored DB from {}", backup_path.display());
+
+            // Re-open so the rest of the program talks to the fresh database
+            db::open(&cfg.db_path).with_context(|| {
+                format!("Could not open restored DB at {}", cfg.db_path.display())
+            })?;
+            info!("Successfully opened restored database.");
+        }
+
+        /* ---- passthrough sub-modules ---------------------------- */
+        Commands::Link(link_cmd) => cli::link::run(&link_cmd, &mut conn, args.format)?,
+        Commands::Coll(coll_cmd) => cli::coll::run(&coll_cmd, &mut conn, args.format)?,
+        Commands::View(view_cmd) => cli::view::run(&view_cmd, &mut conn, args.format)?,
+        Commands::State(state_cmd) => cli::state::run(&state_cmd, &mut conn, args.format)?,
+        Commands::Task(task_cmd) => cli::task::run(&task_cmd, &mut conn, args.format)?,
+        Commands::Remind(rm_cmd) => cli::remind::run(&rm_cmd, &mut conn, args.format)?,
+        Commands::Annotate(a_cmd) => cli::annotate::run(&a_cmd, &mut conn, args.format)?,
+        Commands::Version(v_cmd) => cli::version::run(&v_cmd, &mut conn, args.format)?,
+        Commands::Event(e_cmd) => cli::event::run(&e_cmd, &mut conn, args.format)?,
+        Commands::Watch(watch_cmd) => cli::watch::run(&watch_cmd, &mut conn, args.format)?,
     }
 
-    /* ---- passthrough sub-modules ---------------------------- */
-    Commands::Link(link_cmd)     => cli::link::run(&link_cmd, &mut conn, args.format)?,
-    Commands::Coll(coll_cmd)     => cli::coll::run(&coll_cmd, &mut conn, args.format)?,
-    Commands::View(view_cmd)     => cli::view::run(&view_cmd, &mut conn, args.format)?,
-    Commands::State(state_cmd)   => cli::state::run(&state_cmd, &mut conn, args.format)?,
-    Commands::Task(task_cmd)     => cli::task::run(&task_cmd, &mut conn, args.format)?,
-    Commands::Remind(rm_cmd)     => cli::remind::run(&rm_cmd, &mut conn, args.format)?,
-    Commands::Annotate(a_cmd)    => cli::annotate::run(&a_cmd, &mut conn, args.format)?,
-    Commands::Version(v_cmd)     => cli::version::run(&v_cmd, &mut conn, args.format)?,
-    Commands::Event(e_cmd)       => cli::event::run(&e_cmd, &mut conn, args.format)?,
-    Commands::Watch(watch_cmd)   => cli::watch::run(&watch_cmd, &mut conn, args.format)?,
+    Ok(())
 }
-
-Ok(())
 
 /* ─────────────────── helpers & sub-routines ─────────────────── */
 
