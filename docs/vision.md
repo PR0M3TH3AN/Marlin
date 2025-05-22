@@ -8,7 +8,7 @@
 
 | Feature Area                        | Capabilities                                                                                                                                                                                                                                                                                                                             |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tagging System**                  | • Unlimited, hierarchical or flat tags.<br>• Alias/synonym support with precedence rules (admin‑defined canonical name).<br>• **Bulk tag editing** via multi‑select context menu.<br>• Folder‑to‑Tag import with optional *watch & sync* mode so new sub‑folders inherit tags automatically.                                             |
+| **Tagging System**                  | • Unlimited, hierarchical or flat tags.<br>• Alias/synonym support via admin‑defined mappings (canonical names resolved at query time).<br>• **Bulk tag editing** via multi‑select context menu.<br>• Folder‑to‑Tag import with optional *watch & sync* mode so new sub‑folders inherit tags automatically.                                             |
 | **Custom Metadata Attributes**      | • User‑defined fields (text, number, date, enum, boolean).<br>• Per‑template **Custom Metadata Schemas** (e.g. *Photo* → *Date, Location*).                                                                                                                                                                                              |
 | **File Relationships**              | • Typed, directional or bidirectional links (*related to*, *duplicate of*, *cites*…).<br>• Plugin API can register new relationship sets.                                                                                                                                                                                                |
 | **Version Control for Metadata**    | • Every change logged; unlimited roll‑back.<br>• Side‑by‑side diff viewer and *blame* panel showing *who/when/what*.<br>• Offline edits stored locally and merged (Git‑style optimistic merge with conflict prompts).                                                                                                                    |
@@ -36,7 +36,7 @@
 
 ```text
 files(id PK, path, inode, size, mtime, ctime, hash)
-tags(id PK, name, parent_id, canonical_id)
+tags(id PK, name, parent_id)
 file_tags(file_id FK, tag_id FK)
 attributes(id PK, file_id FK, key, value, value_type)
 relationships(id PK, src_file_id FK, dst_file_id FK, rel_type, direction)
