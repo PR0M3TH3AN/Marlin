@@ -36,6 +36,7 @@ All foreign keys use `ON DELETE CASCADE` so deleting a file, tag, etc. automatic
    3. **0003\_create\_links\_collections\_views.sql** – introduce `links`, `collections`, `collection_files`, and `views` tables.
    4. **0004\_fix\_hierarchical\_tags\_fts.sql** – refine FTS triggers to index full hierarchical tag-paths via a recursive CTE.
 3. Expose this schema through our library (`libmarlin::db::open`) so any client sees a v1.1 store.
+4. Track the version in code via `SCHEMA_VERSION` and provide `current_schema_version()` to query the DB.
 
 ## 3. ER Diagram
 
