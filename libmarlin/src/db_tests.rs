@@ -273,16 +273,25 @@ fn tables_exist_and_fts_triggers() {
     let fid = db::file_id(marlin.conn(), file_path.to_str().unwrap()).unwrap();
     db::upsert_attr(marlin.conn(), fid, "color", "blue").unwrap();
 
-    let row: (String, String, String) = marlin
+    // The FTS index is contentless, so columns return empty strings. Instead
+    // verify that searching for our tag and attribute yields the file path.
+    let hits_tag: Vec<String> = marlin
         .conn()
-        .query_row(
-            "SELECT path, tags_text, attrs_text FROM files_fts WHERE rowid = ?1",
-            [fid],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        )
+        .prepare("SELECT f.path FROM files_fts JOIN files f ON f.id = files_fts.rowid WHERE files_fts MATCH 'foo'")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<std::result::Result<Vec<_>, _>>()
         .unwrap();
+    assert!(hits_tag.contains(&file_path.to_string_lossy().into_owned()));
 
-    assert_eq!(row.0, file_path.to_str().unwrap());
-    assert!(row.1.contains("foo") && row.1.contains("bar"));
-    assert_eq!(row.2, "color=blue");
+    let hits_attr: Vec<String> = marlin
+        .conn()
+        .prepare(r#"SELECT f.path FROM files_fts JOIN files f ON f.id = files_fts.rowid WHERE files_fts MATCH '"color=blue"'"#)
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .unwrap();
+    assert!(hits_attr.contains(&file_path.to_string_lossy().into_owned()));
 }
