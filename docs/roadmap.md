@@ -1,6 +1,6 @@
-# Marlin ― Delivery Road-map **v3**
+# Marlin ― Delivery Road-map **v3.2**
 
-*Engineering-ready version — updated 2025-05-17*
+*Engineering-ready version — updated 2025-05-18*
 
 > **Legend**
 > **△** = engineering artefact (spec / ADR / perf target)  **✦** = user-visible deliverable
@@ -25,7 +25,7 @@
 | Phase / Sprint                                | Timeline | Focus & Rationale                        | ✦ Key UX Deliverables                                                                  | △ Engineering artefacts / tasks                                                                                                    | Definition of Done                                                                                       |
 | --------------------------------------------- | -------- | ---------------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | ~~**Epic 1 — Scale & Reliability**~~          | ~~2025-Q2~~  | ~~Stay fast @ 100 k files~~                  | ~~• `scan --dirty` (re-index touched rows only)~~                                          | ~~• DP-002 Dirty-flag design + FTS rebuild cadence<br>• Hyperfine benchmark script committed~~                                         | ~~Dirty scan vs full ≤ 15 % runtime on 100 k corpus; benchmark job passes~~                                  |
-| **Epic 2 — Live Mode & Self-Pruning Backups** | 2025-Q2  | “Just works” indexing, DB never explodes | • `marlin watch <dir>` (notify/FSEvents)<br>• `backup --prune N` & auto-prune          | • DP-003 file-watcher life-cycle & debouncing<br>• Integration test with inotify-sim <br>• Cron-style GitHub job for nightly prune | 8 h stress-watch alters 10 k files < 1 % misses; backup dir ≤ N                                          |
+| **Epic 2 — Live Mode & Self-Pruning Backups** | 2025-Q2  | “Just works” indexing, DB never explodes | • `marlin watch <dir>` (notify/FSEvents)<br>• `backup --prune N` & auto-prune<br>• rename/move tracking keeps paths current | • DP-003 file-watcher life-cycle & debouncing<br>• Integration test with inotify-sim<br>• Rename/Move handling spec & tests<br>• Cron-style GitHub job for nightly prune | 8 h stress-watch alters 10 k files < 1 % misses; backup dir ≤ N                                          |
 | **Phase 3 — Content FTS + Annotations**       | 2025-Q3  | Search inside files, leave notes         | • Grep-style snippet output (`-C3`)<br>• `marlin annotate add/list`                    | • DP-004 content-blob strategy (inline vs ext-table)<br>• Syntax-highlight via `syntect` PoC<br>• New FTS triggers unit-tested     | Indexes 1 GB corpus in ≤ 30 min; snippet CLI passes golden-file tests                                    |
 | **Phase 4 — Versioning & Deduplication**      | 2025-Q3  | Historic diffs, detect dupes             | • `scan --rehash` (SHA-256)<br>• `version diff <file>`                                 | • DP-005 hash column + Bloom-de-dupe<br>• Binary diff adapter research                                                             | Diff on 10 MB file ≤ 500 ms; dupes listed via CLI                                                        |
 | **Phase 5 — Tag Aliases & Semantic Booster**  | 2025-Q3  | Tame tag sprawl, start AI hints          | • `tag alias add/ls/rm`<br>• `tag suggest`, `summary`                                  | • DP-006 embeddings size & model choice<br>• Vector store schema + k-NN index bench                                                | 95 % of “foo/bar~foo” alias look-ups resolve in one hop; suggest CLI returns ≤ 150 ms                   |
@@ -39,15 +39,21 @@
 
 ### 2 · Feature cross-matrix (quick look-ups)
 
-| Capability                            | Sprint / Phase | CLI flag or GUI element            | Linked DP |
-| ------------------------------------- | -------------- | ---------------------------------- | --------- |
-| Relationship **templates**            | P7             | `template new`, `template apply`   | DP-008    |
-| Positive / negative filter combinator | P6             | DSL `+tag:foo -tag:bar date>=2025` | DP-007    |
-| ~~Dirty-scan optimisation~~           | ~~E1~~         | ~~`scan --dirty`~~                 | ~~DP-002~~ |
-| Watch-mode                            | E2             | `marlin watch .`                   | DP-003    |
-| Grep snippets                         | P3             | `search -C3 "foo"`                 | DP-004    |
-| Hash / dedupe                         | P4             | `scan --rehash`                    | DP-005    |
 
+| Capability                 | Sprint / Phase | CLI / GUI element    | Linked DP |
+| -------------------------- | -------------- | -------------------- | --------- |
+| Crate split & docs autogen | S0             | —                    | –         |
+| Tarpaulin coverage gate    | S0             | —                    | –         |
+| Watch mode (FS events)     | Epic 1         | `marlin watch .`     | DP‑002    |
+| Backup auto‑prune          | Epic 1         | `backup --prune N`   | –         |
+| Rename/move tracking     | Epic 2         | automatic path update | Spec‑RMH |
+| Dirty‑scan                 | Epic 2         | `scan --dirty`       | DP‑002    |
+| Grep snippets              | Phase 3        | `search -C3 …`       | DP‑004    |
+| Hash / dedupe              | Phase 4        | `scan --rehash`      | DP‑005    |
+| Tag aliases                | Phase 5        | `tag alias` commands | DP‑006    |
+| Search DSL v2              | Phase 6        | new grammar, `--legacy-search` flag | DP‑007    |
+| Relationship templates     | Phase 7        | `template new/apply` | DP‑008    |
+| TUI v1                     | Phase 8        | `marlin‑tui`         | DP‑009    |
 ---
 
 ## 3 · Milestone acceptance checklist
@@ -65,8 +71,11 @@ Before a milestone is declared “shipped”:
 
 ### 4 · Next immediate actions
 
-~~1. **Write DP-001 (Schema v1.1)** — owner @alice, due 21 May~~  
-~~2. **Set up Tarpaulin & Hyperfine jobs** — @bob, due 23 May~~  
-~~3. **Spike dirty-flag logic** — @carol 2-day time-box, outcome in DP-002~~  
+| # | Task                           | Owner  | Due           |
+| - | ------------------------------ | ------ | ------------- |
+| ~~1~~ | ~~Crate split + CI baseline~~      | @alice | ~~26 May 25~~ |
+| ~~2~~ | ~~Tarpaulin + Hyperfine jobs~~     | @bob   | ~~26 May 25~~ |
+| 3 | **DP‑001 Schema v1.1** draft   | @carol | **30 May 25** |
+| ~~4~~ | ~~backup prune CLI + nightly job~~ | @dave  | ~~05 Jun 25~~ |
 
 > *This roadmap now contains both product-level “what” and engineering-level “how/when/prove it”.  It should allow a new contributor to jump in, pick the matching DP, and know exactly the bar they must clear for their code to merge.*  

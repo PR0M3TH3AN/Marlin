@@ -79,3 +79,9 @@ event:
     add:
       args: [file, date, description]
     timeline: {}
+
+backup:
+  description: "Create, prune or verify backups"
+  actions:
+    run:
+      flags: ["--dir", "--prune", "--verify", "--file"]

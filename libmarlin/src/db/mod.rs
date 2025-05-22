@@ -18,6 +18,11 @@ use rusqlite::{
 use std::result::Result as StdResult;
 use tracing::{debug, info, warn};
 
+/* ─── schema version ───────────────────────────────────────────────── */
+
+/// Current library schema version.
+pub const SCHEMA_VERSION: i32 = MIGRATIONS.len() as i32;
+
 /* ─── embedded migrations ─────────────────────────────────────────── */
 
 const MIGRATIONS: &[(&str, &str)] = &[
@@ -41,7 +46,23 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0005_add_dirty_table.sql",
         include_str!("migrations/0005_add_dirty_table.sql"),
     ),
+    (
+        "0006_drop_tags_canonical_id.sql",
+        include_str!("migrations/0006_drop_tags_canonical_id.sql"),
+    ),
 ];
+
+/* ─── schema helpers ─────────────────────────────────────────────── */
+
+/// Fetch the highest version recorded in the `schema_version` table.
+pub fn current_schema_version(conn: &Connection) -> Result<i32> {
+    let version: i32 = conn.query_row(
+        "SELECT IFNULL(MAX(version), 0) FROM schema_version",
+        [],
+        |r| r.get(0),
+    )?;
+    Ok(version)
+}
 
 /* ─── connection bootstrap ────────────────────────────────────────── */
 
@@ -127,6 +148,15 @@ pub(crate) fn apply_migrations(conn: &mut Connection) -> Result<()> {
     }
     if !missing.is_empty() {
         warn!("migrations not applied: {:?}", missing);
+    }
+
+    let current = current_schema_version(conn)?;
+    if current != SCHEMA_VERSION {
+        anyhow::bail!(
+            "database schema version {} does not match library version {}",
+            current,
+            SCHEMA_VERSION
+        );
     }
 
     Ok(())

@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS tags (
     id           INTEGER PRIMARY KEY,
     name         TEXT    NOT NULL,           -- tag segment
     parent_id    INTEGER REFERENCES tags(id) ON DELETE CASCADE,
-    canonical_id INTEGER REFERENCES tags(id) ON DELETE SET NULL,
+    canonical_id INTEGER REFERENCES tags(id),
     UNIQUE(name, parent_id)
 );
 

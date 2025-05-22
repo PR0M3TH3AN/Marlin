@@ -234,3 +234,64 @@ mod dirty_helpers {
         assert!(empty.is_empty());
     }
 }
+
+#[test]
+fn tables_exist_and_fts_triggers() {
+    use super::Marlin;
+    use std::fs;
+
+    let tmp = tempdir().unwrap();
+    let db_path = tmp.path().join("test.db");
+    let mut marlin = Marlin::open_at(&db_path).unwrap();
+
+    // the DB file should exist after opening
+    assert!(db_path.exists());
+
+    // confirm required tables
+    for table in ["links", "collections", "collection_files", "views"] {
+        let cnt: i64 = marlin
+            .conn()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+                [table],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(cnt, 1, "missing table {table}");
+    }
+
+    // create a file to index
+    let file_dir = tmp.path().join("files");
+    fs::create_dir(&file_dir).unwrap();
+    let file_path = file_dir.join("sample.txt");
+    fs::write(&file_path, "hello world").unwrap();
+
+    // index via public helper
+    marlin.scan(&[&file_dir]).unwrap();
+    marlin.tag("*.txt", "foo/bar").unwrap();
+
+    let fid = db::file_id(marlin.conn(), file_path.to_str().unwrap()).unwrap();
+    db::upsert_attr(marlin.conn(), fid, "color", "blue").unwrap();
+
+    // The FTS index is contentless, so columns return empty strings. Instead
+    // verify that searching for our tag and attribute yields the file path.
+    let hits_tag: Vec<String> = marlin
+        .conn()
+        .prepare("SELECT f.path FROM files_fts JOIN files f ON f.id = files_fts.rowid WHERE files_fts MATCH 'foo'")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .unwrap();
+    assert!(hits_tag.contains(&file_path.to_string_lossy().into_owned()));
+
+    let hits_attr: Vec<String> = marlin
+        .conn()
+        .prepare(r#"SELECT f.path FROM files_fts JOIN files f ON f.id = files_fts.rowid WHERE files_fts MATCH '"color=blue"'"#)
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .unwrap();
+    assert!(hits_attr.contains(&file_path.to_string_lossy().into_owned()));
+}

@@ -27,6 +27,8 @@ mod logging_tests;
 #[cfg(test)]
 mod scan_tests;
 #[cfg(test)]
+mod test_utils;
+#[cfg(test)]
 mod utils_tests;
 #[cfg(test)]
 mod watcher_tests;

@@ -1,11 +1,13 @@
 // libmarlin/src/config_tests.rs
 
 use super::config::Config;
+use crate::test_utils::ENV_MUTEX;
 use std::env;
 use tempfile::tempdir;
 
 #[test]
 fn load_env_override() {
+    let _guard = ENV_MUTEX.lock().unwrap();
     let tmp = tempdir().unwrap();
     let db = tmp.path().join("custom.db");
     env::set_var("MARLIN_DB_PATH", &db);
@@ -16,6 +18,7 @@ fn load_env_override() {
 
 #[test]
 fn load_xdg_or_fallback() {
+    let _guard = ENV_MUTEX.lock().unwrap();
     // since XDG_DATA_HOME will normally be present, just test it doesn't error
     let cfg = Config::load().unwrap();
     assert!(cfg.db_path.to_string_lossy().ends_with(".db"));
@@ -23,6 +26,7 @@ fn load_xdg_or_fallback() {
 
 #[test]
 fn load_fallback_current_dir() {
+    let _guard = ENV_MUTEX.lock().unwrap();
     // Save and clear HOME & XDG_DATA_HOME
     let orig_home = env::var_os("HOME");
     let orig_xdg = env::var_os("XDG_DATA_HOME");

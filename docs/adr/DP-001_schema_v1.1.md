@@ -1,6 +1,6 @@
 # DP-001: Schema v1.1 – Core Metadata Domains
 
-**Status**: Proposed  
+**Status**: Accepted  
 **Authors**: @carol  
 **Date**: 2025-05-17
 
@@ -8,14 +8,14 @@
 
 We’ve landed a basic SQLite-backed `files` table and a contentless FTS5 index. Before we build out higher-level features, we need to lock down our **v1.1** metadata schema for:
 
-- **Hierarchical tags** (`tags` + `file_tags`)
+- **Hierarchical tags** (`tags` + `file_tags`) – optional `canonical_id` for aliases
 - **Custom attributes** (`attributes`)
 - **File-to-file relationships** (`links`)
 - **Named collections** (`collections` + `collection_files`)
-- **Saved views** (`saved_views`)
+- **Views** (`views`)
 
 Locking this schema now lets downstream CLI & GUI work against a stable model and ensures our migrations stay easy to reason about.  
-*Note: Tag aliases and their `canonical_id` support are deferred to DP-006 (v1.5).*
+Tags optionally reference a canonical tag via the `canonical_id` column.
 
 ## 2. Decision
 
@@ -33,9 +33,10 @@ All foreign keys use `ON DELETE CASCADE` so deleting a file, tag, etc. automatic
 
    1. **0001\_initial\_schema.sql** – create core tables (`files`, `tags`, `file_tags`, `attributes`), a contentless FTS5 table (`files_fts`), core FTS triggers, and performance-critical indexes.
    2. **0002\_update\_fts\_and\_triggers.sql** – replace old tag/attr FTS triggers with `INSERT OR REPLACE` semantics for full-row refresh.
-   3. **0003\_create\_links\_collections\_saved\_views.sql** – introduce `links`, `collections`, `collection_files`, and `saved_views` tables.
+   3. **0003\_create\_links\_collections\_views.sql** – introduce `links`, `collections`, `collection_files`, and `views` tables.
    4. **0004\_fix\_hierarchical\_tags\_fts.sql** – refine FTS triggers to index full hierarchical tag-paths via a recursive CTE.
 3. Expose this schema through our library (`libmarlin::db::open`) so any client sees a v1.1 store.
+4. Track the version in code via `SCHEMA_VERSION` and provide `current_schema_version()` to query the DB.
 
 ## 3. ER Diagram
 
@@ -57,6 +58,7 @@ entity tags {
   --
     name      : TEXT
     parent_id : INTEGER <<FK>>
+    canonical_id : INTEGER <<FK>>
 }
 
 entity file_tags {
@@ -91,7 +93,7 @@ entity collection_files {
   * file_id       : INTEGER <<FK>>
 }
 
-entity saved_views {
+entity views {
   * id    : INTEGER <<PK>>
   --
     name  : TEXT
@@ -109,7 +111,7 @@ files          ||--o{ links : "dst_file_id"
 collections    ||--o{ collection_files
 files          ||--o{ collection_files
 
-saved_views    ||..|| files : "exec via FTS"
+views          ||..|| files : "exec via FTS"
 @enduml
 ```
 
@@ -135,7 +137,7 @@ Or in plain-ASCII:
 └─────────────┘     └──────────────────┘     └────────┘
 
 ┌─────────────┐
-│ saved_views │
+│ views │
 │ (exec FTS)  │
 └─────────────┘
 ```
@@ -146,8 +148,9 @@ Or in plain-ASCII:
 | ------------------------------------------------------ | ------------------------------------------------------------- |
 | **0001\_initial\_schema.sql**                          | Core tables + contentless FTS + core triggers + indexes       |
 | **0002\_update\_fts\_and\_triggers.sql**               | Full-row FTS refresh on tag/attr changes                      |
-| **0003\_create\_links\_collections\_saved\_views.sql** | Add `links`, `collections`, `collection_files`, `saved_views` |
+| **0003\_create\_links\_collections\_views.sql** | Add `links`, `collections`, `collection_files`, `views` |
 | **0004\_fix\_hierarchical\_tags\_fts.sql**             | Recursive CTE for full tag-path indexing in FTS triggers      |
+| **0005_add_dirty_table.sql**                           | Track modified files needing reindexing |
 
 ### Performance-Critical Indexes
 

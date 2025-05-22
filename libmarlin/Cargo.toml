@@ -27,6 +27,7 @@ json = ["serde_json"]
 [dev-dependencies]
 # for temporary directories in config_tests.rs and scan_tests.rs
 tempfile = "3"
+lazy_static = "1"
 
 # you already have rusqlite in [dependencies], so scan_tests.rs
 # can just use rusqlite::Connection, no need to repeat it here.

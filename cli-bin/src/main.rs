@@ -9,6 +9,7 @@
 mod cli; // sub-command definitions and argument structs
 
 /* ── shared modules re-exported from libmarlin ─────────────────── */
+use libmarlin::backup::BackupManager;
 use libmarlin::db::take_dirty;
 use libmarlin::{config, db, logging, scan, utils::determine_scan_root};
 
@@ -41,7 +42,7 @@ fn main() -> Result<()> {
     let cfg = config::Config::load()?; // resolves DB path
 
     match &args.command {
-        Commands::Init | Commands::Backup | Commands::Restore { .. } => {}
+        Commands::Init | Commands::Backup(_) | Commands::Restore { .. } => {}
         _ => match db::backup(&cfg.db_path) {
             Ok(p) => info!("Pre-command auto-backup created at {}", p.display()),
             Err(e) => error!("Failed to create pre-command auto-backup: {e}"),
@@ -100,23 +101,43 @@ fn main() -> Result<()> {
         Commands::Search { query, exec } => run_search(&conn, &query, exec)?,
 
         /* ---- maintenance ---------------------------------------- */
-        Commands::Backup => {
-            let p = db::backup(&cfg.db_path)?;
-            println!("Backup created: {}", p.display());
+        Commands::Backup(opts) => {
+            cli::backup::run(&opts, &cfg.db_path, &mut conn, args.format)?;
         }
 
         Commands::Restore { backup_path } => {
-            drop(conn);
-            db::restore(&backup_path, &cfg.db_path)
-                .with_context(|| format!("Failed to restore DB from {}", backup_path.display()))?;
+            drop(conn); // close connection so the restore can overwrite the DB file
+
+            if backup_path.exists() {
+                // User pointed to an actual backup file on disk
+                db::restore(&backup_path, &cfg.db_path).with_context(|| {
+                    format!("Failed to restore DB from {}", backup_path.display())
+                })?;
+            } else {
+                // Assume they passed just the file-name that lives in the standard backups dir
+                let backups_dir = cfg.db_path.parent().unwrap().join("backups");
+                let manager = BackupManager::new(&cfg.db_path, &backups_dir)?;
+
+                let name = backup_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .context("invalid backup file name")?;
+
+                manager.restore_from_backup(name).with_context(|| {
+                    format!("Failed to restore DB from {}", backup_path.display())
+                })?;
+            }
+
             println!("Restored DB from {}", backup_path.display());
+
+            // Re-open so the rest of the program talks to the fresh database
             db::open(&cfg.db_path).with_context(|| {
                 format!("Could not open restored DB at {}", cfg.db_path.display())
             })?;
             info!("Successfully opened restored database.");
         }
 
-        /* ---- passthrough sub-modules (some still stubs) ---------- */
+        /* ---- passthrough sub-modules ---------------------------- */
         Commands::Link(link_cmd) => cli::link::run(&link_cmd, &mut conn, args.format)?,
         Commands::Coll(coll_cmd) => cli::coll::run(&coll_cmd, &mut conn, args.format)?,
         Commands::View(view_cmd) => cli::view::run(&view_cmd, &mut conn, args.format)?,
