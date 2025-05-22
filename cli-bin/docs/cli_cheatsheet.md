@@ -22,3 +22,6 @@
 | `event add` | — |
 | `event timeline` | — |
 | `backup run` | --dir, --prune, --verify, --file |
+| `watch start` | --debounce-ms |
+| `watch status` | — |
+| `watch stop` | — |
