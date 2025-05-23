@@ -13,8 +13,39 @@ mod tests {
     use std::io::Write;
     // No longer need: use std::path::PathBuf;
     use std::thread;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
     use tempfile::tempdir;
+
+    /// Polls the DB until `query` returns `expected` or the timeout elapses.
+    fn wait_for_row_count(
+        marlin: &Marlin,
+        path: &std::path::Path,
+        expected: i64,
+        timeout: Duration,
+    ) {
+        let start = Instant::now();
+        loop {
+            let count: i64 = marlin
+                .conn()
+                .query_row(
+                    "SELECT COUNT(*) FROM files WHERE path = ?1",
+                    [path.to_string_lossy()],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            if count == expected {
+                break;
+            }
+            if start.elapsed() > timeout {
+                panic!(
+                    "Timed out waiting for {} rows for {}",
+                    expected,
+                    path.display()
+                );
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
 
     #[test]
     fn test_watcher_lifecycle() {
@@ -169,13 +200,12 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         let new_file = dir.join("b.txt");
         fs::rename(&file, &new_file).unwrap();
-        thread::sleep(Duration::from_millis(1500));
+        wait_for_row_count(&marlin, &new_file, 1, Duration::from_secs(10));
+        watcher.stop().unwrap();
         assert!(
             watcher.status().unwrap().events_processed > 0,
             "rename event should be processed"
         );
-        watcher.stop().unwrap();
-        thread::sleep(Duration::from_millis(100));
 
         let count: i64 = marlin
             .conn()
@@ -216,13 +246,15 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         let new = dir.join("newdir");
         fs::rename(&sub, &new).unwrap();
-        thread::sleep(Duration::from_millis(1500));
+        for fname in ["one.txt", "two.txt"] {
+            let p = new.join(fname);
+            wait_for_row_count(&marlin, &p, 1, Duration::from_secs(10));
+        }
+        watcher.stop().unwrap();
         assert!(
             watcher.status().unwrap().events_processed > 0,
             "rename event should be processed"
         );
-        watcher.stop().unwrap();
-        thread::sleep(Duration::from_millis(100));
 
         for fname in ["one.txt", "two.txt"] {
             let p = new.join(fname);
