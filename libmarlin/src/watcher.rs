@@ -6,7 +6,7 @@
 //! watcher can be paused, resumed and shut down cleanly.
 
 use crate::db::{self, Database};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::{bounded, Receiver};
 use notify::{
     event::{ModifyKind, RemoveKind, RenameMode},
@@ -240,6 +240,21 @@ impl FileWatcher {
             Arc::new(Mutex::new(None));
         let db_for_thread = db_shared_for_thread.clone();
 
+        fn handle_db_update(
+            db_mutex: &Mutex<Database>,
+            old_s: &str,
+            new_s: &str,
+            is_dir: bool,
+        ) -> Result<()> {
+            let mut guard = db_mutex.lock().map_err(|_| anyhow!("db mutex poisoned"))?;
+            if is_dir {
+                db::rename_directory(guard.conn_mut(), old_s, new_s)?;
+            } else {
+                db::update_file_path(guard.conn_mut(), old_s, new_s)?;
+            }
+            Ok(())
+        }
+
         let processor_thread = thread::spawn(move || {
             let mut debouncer = EventDebouncer::new(config_clone.debounce_ms);
             let mut rename_cache: HashMap<usize, PathBuf> = HashMap::new();
@@ -441,19 +456,8 @@ impl FileWatcher {
                                 if let (Some(old_p), Some(new_p)) = (&ev.old_path, &ev.new_path) {
                                     let old_s = old_p.to_string_lossy();
                                     let new_s = new_p.to_string_lossy();
-                                    let res = if new_p.is_dir() {
-                                        db::rename_directory(
-                                            db_mutex.lock().unwrap().conn_mut(),
-                                            &old_s,
-                                            &new_s,
-                                        )
-                                    } else {
-                                        db::update_file_path(
-                                            db_mutex.lock().unwrap().conn_mut(),
-                                            &old_s,
-                                            &new_s,
-                                        )
-                                    };
+                                    let res =
+                                        handle_db_update(db_mutex, &old_s, &new_s, new_p.is_dir());
                                     if let Err(e) = res {
                                         eprintln!("DB rename error: {:?}", e);
                                     }
