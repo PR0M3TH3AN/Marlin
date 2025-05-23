@@ -61,7 +61,7 @@ mod tests {
         thread::sleep(Duration::from_millis(200));
         fs::remove_file(&new_file_path).expect("Failed to remove file");
 
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(1500));
         watcher.stop().expect("Failed to stop watcher");
 
         assert_eq!(watcher.status().unwrap().state, WatcherState::Stopped);
@@ -169,8 +169,13 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         let new_file = dir.join("b.txt");
         fs::rename(&file, &new_file).unwrap();
-        thread::sleep(Duration::from_millis(200));
+        thread::sleep(Duration::from_millis(1500));
+        assert!(
+            watcher.status().unwrap().events_processed > 0,
+            "rename event should be processed"
+        );
         watcher.stop().unwrap();
+        thread::sleep(Duration::from_millis(100));
 
         let count: i64 = marlin
             .conn()
@@ -211,8 +216,13 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         let new = dir.join("newdir");
         fs::rename(&sub, &new).unwrap();
-        thread::sleep(Duration::from_millis(300));
+        thread::sleep(Duration::from_millis(1500));
+        assert!(
+            watcher.status().unwrap().events_processed > 0,
+            "rename event should be processed"
+        );
         watcher.stop().unwrap();
+        thread::sleep(Duration::from_millis(100));
 
         for fname in ["one.txt", "two.txt"] {
             let p = new.join(fname);
