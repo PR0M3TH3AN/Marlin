@@ -90,7 +90,6 @@ fn test_basic_watch_functionality() {
         debounce_ms: 100,
         batch_size: 100,
         max_queue_size: 1000,
-        drain_timeout_ms: 1000,
     };
     
     let mut watcher = FileWatcher::new(vec![temp_path.clone()], config)
@@ -152,7 +151,6 @@ fn test_debouncing() {
         debounce_ms: 200,  // 200ms debounce window
         batch_size: 100,
         max_queue_size: 1000,
-        drain_timeout_ms: 1000,
     };
     
     let mut watcher = FileWatcher::new(vec![temp_path.clone()], config)
@@ -213,7 +211,6 @@ fn test_event_flood() {
         debounce_ms: 100,
         batch_size: 500,  // Handle larger batches
         max_queue_size: 10000,  // Large queue for burst
-        drain_timeout_ms: 5000, // Longer drain time for cleanup
     };
     
     let mut watcher = FileWatcher::new(vec![temp_path.clone()], config)
@@ -270,7 +267,6 @@ fn test_hierarchical_debouncing() {
         debounce_ms: 200,
         batch_size: 100,
         max_queue_size: 1000,
-        drain_timeout_ms: 1000,
     };
     
     let mut watcher = FileWatcher::new(vec![temp_path.clone()], config)
@@ -324,7 +320,6 @@ fn test_graceful_shutdown() {
         debounce_ms: 100,
         batch_size: 100,
         max_queue_size: 1000,
-        drain_timeout_ms: 2000, // 2 second drain timeout
     };
     
     let mut watcher = FileWatcher::new(vec![temp_path.clone()], config)

@@ -94,7 +94,6 @@ pub struct WatcherConfig {
     debounce_ms: u64,           // Default: 100ms
     batch_size: usize,          // Default: 1000 events
     max_queue_size: usize,      // Default: 100,000 events
-    drain_timeout_ms: u64,      // Default: 5000ms
 }
 
 impl FileWatcher {

@@ -26,7 +26,6 @@ pub struct WatcherConfig {
     pub debounce_ms: u64,
     pub batch_size: usize,
     pub max_queue_size: usize,
-    pub drain_timeout_ms: u64,
 }
 
 impl Default for WatcherConfig {
@@ -35,7 +34,6 @@ impl Default for WatcherConfig {
             debounce_ms: 100,
             batch_size: 1_000,
             max_queue_size: 100_000,
-            drain_timeout_ms: 5_000,
         }
     }
 }
@@ -863,7 +861,6 @@ mod file_watcher_state_tests {
         assert_eq!(cfg.debounce_ms, 100);
         assert_eq!(cfg.batch_size, 1_000);
         assert_eq!(cfg.max_queue_size, 100_000);
-        assert_eq!(cfg.drain_timeout_ms, 5_000);
     }
 
     #[test]
