@@ -270,8 +270,11 @@ impl FileWatcher {
                                 }
 
                                 // 2. native rename events from notify
-                                EventKind::Modify(ModifyKind::Name(mode)) => match mode {
-                                    RenameMode::Both => {
+                                EventKind::Modify(ModifyKind::Name(name_kind)) => match name_kind {
+                                    // Notify >= 6 emits `Both` when both paths are
+                                    // supplied and `Any` as a catch-all for renames.
+                                    // Treat both cases as a complete rename.
+                                    RenameMode::Both | RenameMode::Any => {
                                         if event.paths.len() >= 2 {
                                             let old_p = event.paths[0].clone();
                                             let new_p = event.paths[1].clone();
@@ -333,6 +336,10 @@ impl FileWatcher {
                                             });
                                         }
                                     }
+                                    // `From`/`To` are handled above. Any other
+                                    // value (`Other` or legacy `Rename`/`Move`
+                                    // variants) is treated as a normal modify
+                                    // event.
                                     _ => {
                                         for p in event.paths {
                                             debouncer.add_event(ProcessedEvent {
