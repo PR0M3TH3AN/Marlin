@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-use tracing::info;
+use tracing::{error, info};
 
 // ────── configuration ─────────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
@@ -369,7 +369,7 @@ impl FileWatcher {
                                 }
                             } // end match event.kind
                         } // <--- closes Ok(event)
-                        Err(e) => eprintln!("watcher channel error: {:?}", e),
+                        Err(e) => error!("watcher channel error: {:?}", e),
                     }
 
                     if processed_in_batch >= config_clone.batch_size {
@@ -423,7 +423,7 @@ impl FileWatcher {
                                         )
                                     };
                                     if let Err(e) = res {
-                                        eprintln!("DB rename error: {:?}", e);
+                                        error!("DB rename error: {:?}", e);
                                     }
                                 }
                             }

@@ -6,6 +6,7 @@ use rusqlite;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use tracing::warn;
 
 use crate::error as marlin_error;
 
@@ -156,12 +157,15 @@ impl BackupManager {
                                     let local_dt = match local_dt_result {
                                         chrono::LocalResult::Single(dt) => dt,
                                         chrono::LocalResult::Ambiguous(dt1, _dt2) => {
-                                            eprintln!("Warning: Ambiguous local time for backup {}, taking first interpretation.", filename);
+                                            warn!(
+                                                "Ambiguous local time for backup {}, taking first interpretation",
+                                                filename
+                                            );
                                             dt1
                                         }
                                         chrono::LocalResult::None => {
-                                            eprintln!(
-                                                "Warning: Invalid local time for backup {}, skipping.",
+                                            warn!(
+                                                "Invalid local time for backup {}, skipping",
                                                 filename
                                             );
                                             continue;
@@ -253,7 +257,16 @@ impl BackupManager {
 mod tests {
     use super::*;
     use crate::db::open as open_marlin_db;
+    use std::sync::Once;
     use tempfile::tempdir;
+
+    static INIT: Once = Once::new();
+
+    fn init_logging() {
+        INIT.call_once(|| {
+            crate::logging::init();
+        });
+    }
 
     fn create_valid_live_db(path: &Path) -> rusqlite::Connection {
         let conn = open_marlin_db(path).unwrap_or_else(|e| {
@@ -273,6 +286,7 @@ mod tests {
 
     #[test]
     fn test_backup_manager_new_creates_dir() {
+        init_logging();
         let base_tmp = tempdir().unwrap();
         let live_db_path = base_tmp.path().join("live_new_creates.db");
         let _conn = create_valid_live_db(&live_db_path);
@@ -287,6 +301,7 @@ mod tests {
 
     #[test]
     fn test_backup_manager_new_with_existing_dir() {
+        init_logging();
         let base_tmp = tempdir().unwrap();
         let live_db_path = base_tmp.path().join("live_existing_dir.db");
         let _conn = create_valid_live_db(&live_db_path);
@@ -303,6 +318,7 @@ mod tests {
 
     #[test]
     fn test_backup_manager_new_fails_if_backup_path_is_file() {
+        init_logging();
         let base_tmp = tempdir().unwrap();
         let live_db_path = base_tmp.path().join("live_backup_path_is_file.db");
         let _conn = create_valid_live_db(&live_db_path);
@@ -319,6 +335,7 @@ mod tests {
 
     #[test]
     fn test_create_backup_failure_non_existent_live_db() {
+        init_logging();
         let base_tmp = tempdir().unwrap();
         let live_db_path = base_tmp.path().join("non_existent_live.db");
         let backups_dir = base_tmp.path().join("backups_fail_test");
@@ -335,6 +352,7 @@ mod tests {
 
     #[test]
     fn test_create_list_prune_backups() {
+        init_logging();
         let tmp = tempdir().unwrap();
         let live_db_file = tmp.path().join("live_for_clp_test.db");
         let _conn_live = create_valid_live_db(&live_db_file);
@@ -424,6 +442,7 @@ mod tests {
 
     #[test]
     fn test_restore_backup() {
+        init_logging();
         let tmp = tempdir().unwrap();
         let live_db_path = tmp.path().join("live_for_restore_test.db");
 
@@ -466,6 +485,7 @@ mod tests {
 
     #[test]
     fn test_restore_non_existent_backup() {
+        init_logging();
         let tmp = tempdir().unwrap();
         let live_db_path = tmp.path().join("live_for_restore_fail_test.db");
         let _conn = create_valid_live_db(&live_db_path);
@@ -485,6 +505,7 @@ mod tests {
 
     #[test]
     fn list_backups_with_non_backup_files() {
+        init_logging();
         let tmp = tempdir().unwrap();
         let live_db_file = tmp.path().join("live_for_list_test.db");
         let _conn = create_valid_live_db(&live_db_file);
@@ -510,6 +531,7 @@ mod tests {
 
     #[test]
     fn list_backups_handles_io_error_on_read_dir() {
+        init_logging();
         let tmp = tempdir().unwrap();
         let live_db_file = tmp.path().join("live_for_list_io_error.db");
         let _conn = create_valid_live_db(&live_db_file);
@@ -525,6 +547,7 @@ mod tests {
 
     #[test]
     fn list_backups_fallback_modification_time() {
+        init_logging();
         let tmp = tempdir().unwrap();
         let live_db = tmp.path().join("live_for_badformat.db");
         let _conn = create_valid_live_db(&live_db);
@@ -548,6 +571,7 @@ mod tests {
 
     #[test]
     fn verify_backup_ok() {
+        init_logging();
         let tmp = tempdir().unwrap();
         let live_db = tmp.path().join("live_verify.db");
         let _conn = create_valid_live_db(&live_db);

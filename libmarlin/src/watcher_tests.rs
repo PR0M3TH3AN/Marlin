@@ -11,13 +11,23 @@ mod tests {
 
     use std::fs::{self, File};
     use std::io::Write;
+    use std::sync::Once;
     // No longer need: use std::path::PathBuf;
     use std::thread;
     use std::time::Duration;
     use tempfile::tempdir;
 
+    static INIT: Once = Once::new();
+
+    fn init_logging() {
+        INIT.call_once(|| {
+            crate::logging::init();
+        });
+    }
+
     #[test]
     fn test_watcher_lifecycle() {
+        init_logging();
         // Create a temp directory for testing
         let temp_dir = tempdir().expect("Failed to create temp directory");
         let temp_path = temp_dir.path();
@@ -73,6 +83,7 @@ mod tests {
 
     #[test]
     fn test_backup_manager_related_functionality() {
+        init_logging();
         let live_db_tmp_dir = tempdir().expect("Failed to create temp directory for live DB");
         let backups_storage_tmp_dir =
             tempdir().expect("Failed to create temp directory for backups storage");
@@ -148,6 +159,7 @@ mod tests {
 
     #[test]
     fn rename_file_updates_db() {
+        init_logging();
         let tmp = tempdir().unwrap();
         let dir = tmp.path();
         let file = dir.join("a.txt");
@@ -190,6 +202,7 @@ mod tests {
 
     #[test]
     fn rename_directory_updates_children() {
+        init_logging();
         let tmp = tempdir().unwrap();
         let dir = tmp.path();
         let sub = dir.join("old");
