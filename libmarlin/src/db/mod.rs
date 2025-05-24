@@ -50,6 +50,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0006_drop_tags_canonical_id.sql",
         include_str!("migrations/0006_drop_tags_canonical_id.sql"),
     ),
+    (
+        "0007_fix_rename_trigger.sql",
+        include_str!("migrations/0007_fix_rename_trigger.sql"),
+    ),
 ];
 
 /* ─── schema helpers ─────────────────────────────────────────────── */
