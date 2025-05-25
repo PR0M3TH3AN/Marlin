@@ -20,12 +20,12 @@ use tracing::{debug, info, warn};
 
 use crate::utils::to_db_path;
 
-/* ─── schema version ───────────────────────────────────────────────── */
+/* ─── schema version ─────────────────────────────────────────────── */
 
 /// Current library schema version.
 pub const SCHEMA_VERSION: i32 = MIGRATIONS.len() as i32;
 
-/* ─── embedded migrations ─────────────────────────────────────────── */
+/* ─── embedded migrations ────────────────────────────────────────── */
 
 const MIGRATIONS: &[(&str, &str)] = &[
     (
@@ -70,7 +70,7 @@ pub fn current_schema_version(conn: &Connection) -> Result<i32> {
     Ok(version)
 }
 
-/* ─── connection bootstrap ────────────────────────────────────────── */
+/* ─── connection bootstrap ───────────────────────────────────────── */
 
 pub fn open<P: AsRef<Path>>(db_path: P) -> Result<Connection> {
     let db_path_ref = db_path.as_ref();
@@ -87,7 +87,7 @@ pub fn open<P: AsRef<Path>>(db_path: P) -> Result<Connection> {
     Ok(conn)
 }
 
-/* ─── migration runner ────────────────────────────────────────────── */
+/* ─── migration runner ───────────────────────────────────────────── */
 
 pub(crate) fn apply_migrations(conn: &mut Connection) -> Result<()> {
     // Ensure schema_version bookkeeping table exists
@@ -136,7 +136,7 @@ pub(crate) fn apply_migrations(conn: &mut Connection) -> Result<()> {
 
     tx.commit()?;
 
-    // sanity – warn if any embedded migration got skipped
+    // Sanity – warn if any embedded migration got skipped
     let mut missing = Vec::new();
     for (fname, _) in MIGRATIONS {
         let v: i64 = fname.split('_').next().unwrap().parse().unwrap();
@@ -168,7 +168,7 @@ pub(crate) fn apply_migrations(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
-/* ─── tag helpers ─────────────────────────────────────────────────── */
+/* ─── tag helpers ────────────────────────────────────────────────── */
 
 pub fn ensure_tag_path(conn: &Connection, path: &str) -> Result<i64> {
     let mut parent: Option<i64> = None;
@@ -197,7 +197,7 @@ pub fn file_id(conn: &Connection, path: &str) -> Result<i64> {
     .map_err(|_| anyhow::anyhow!("file not indexed: {}", path))
 }
 
-/* ─── attributes ──────────────────────────────────────────────────── */
+/* ─── attributes ─────────────────────────────────────────────────── */
 
 pub fn upsert_attr(conn: &Connection, file_id: i64, key: &str, value: &str) -> Result<()> {
     conn.execute(
@@ -211,7 +211,7 @@ pub fn upsert_attr(conn: &Connection, file_id: i64, key: &str, value: &str) -> R
     Ok(())
 }
 
-/* ─── links ───────────────────────────────────────────────────────── */
+/* ─── links ──────────────────────────────────────────────────────── */
 
 pub fn add_link(
     conn: &Connection,
@@ -308,7 +308,7 @@ pub fn find_backlinks(conn: &Connection, pattern: &str) -> Result<Vec<(String, O
     Ok(out)
 }
 
-/* ─── collections helpers ────────────────────────────────────────── */
+/* ─── collections helpers ───────────────────────────────────────── */
 
 pub fn ensure_collection(conn: &Connection, name: &str) -> Result<i64> {
     conn.execute(
@@ -373,7 +373,7 @@ pub fn view_query(conn: &Connection, name: &str) -> Result<String> {
     .context(format!("no view called '{}'", name))
 }
 
-/* ─── dirty‐scan helpers ─────────────────────────────────────────── */
+/* ─── dirty-scan helpers ────────────────────────────────────────── */
 
 /// Mark a file as “dirty” so it’ll be picked up by `scan_dirty`.
 pub fn mark_dirty(conn: &Connection, file_id: i64) -> Result<()> {
@@ -398,7 +398,7 @@ pub fn take_dirty(conn: &Connection) -> Result<Vec<i64>> {
     Ok(ids)
 }
 
-/* ─── rename helpers ────────────────────────────────────────────── */
+/* ─── rename helpers ───────────────────────────────────────────── */
 
 pub fn update_file_path(conn: &Connection, old_path: &str, new_path: &str) -> Result<()> {
     let old_path = to_db_path(old_path);
@@ -437,7 +437,7 @@ pub fn rename_directory(conn: &mut Connection, old_dir: &str, new_dir: &str) -> 
     Ok(())
 }
 
-/* ─── backup / restore helpers ────────────────────────────────────── */
+/* ─── backup / restore helpers ───────────────────────────────────── */
 
 pub fn backup<P: AsRef<Path>>(db_path: P) -> Result<PathBuf> {
     let src = db_path.as_ref();
@@ -463,7 +463,7 @@ pub fn restore<P: AsRef<Path>>(backup_path: P, live_db_path: P) -> Result<()> {
     Ok(())
 }
 
-/* ─── tests ───────────────────────────────────────────────────────── */
+/* ─── tests ─────────────────────────────────────────────────────── */
 
 #[cfg(test)]
 mod tests {
