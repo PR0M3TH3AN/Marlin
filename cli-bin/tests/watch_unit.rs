@@ -8,8 +8,10 @@ use libmarlin::{self as marlin, db};
 use marlin_cli::cli::watch::WatchCmd;
 use marlin_cli::cli::{watch, Format};
 
+#[cfg(unix)]
 #[test]
 fn watch_start_and_stop_quickly() {
+    // TODO: Use a Windows console control handler and enable this test on Windows.
     let tmp = tempdir().unwrap();
     let db_path = tmp.path().join("index.db");
     std::env::set_var("MARLIN_DB_PATH", &db_path);
