@@ -21,8 +21,10 @@ shlex              = "1.3"
 tracing            = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 walkdir            = "2.5"
-serde_json         = { version = "1", optional = true }
+serde_json         = "1"
+serde              = { version = "1", features = ["derive"] }
 once_cell          = "1"
+nix                = "0.30"
 
 [dev-dependencies]
 assert_cmd = "2"
@@ -34,7 +36,7 @@ libc        = "0.2"
 
 [features]
 # Enable JSON output with `--features json`
-json = ["serde_json"]
+json = []
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }
