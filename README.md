@@ -9,7 +9,16 @@ for the current delivery roadmap and schema.
 
 Follow the short walkthrough in
 [docs/marlin_demo.md](docs/marlin_demo.md) to build the
-binary and test Marlin on a sample project.
+binary and test Marlin on a sample project. Paths in the
+database are always stored with forward slashes (`/`), even
+on Windows.
+
+```powershell
+# PowerShell build example
+$env:CARGO_TARGET_DIR = "target"
+cargo build --release
+Copy-Item target\release\marlin.exe C:\Tools\marlin.exe
+```
 
 ## CLI Cheatsheet
 
