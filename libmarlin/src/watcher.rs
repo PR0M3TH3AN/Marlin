@@ -13,7 +13,6 @@ use notify::{
     event::{ModifyKind, RemoveKind, RenameMode},
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcherTrait,
 };
-#[cfg(not(windows))]
 use same_file::Handle;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -94,13 +93,12 @@ struct RemoveTracker {
 
 impl RemoveTracker {
     fn record(&mut self, path: &PathBuf) {
-        #[cfg(not(windows))]
         if let Ok(h) = Handle::from_path(path) {
             self.map.insert(h.ino(), (path.clone(), Instant::now()));
             return;
         }
 
-        // fall back to hashing path if inode not available or on Windows
+        // fall back to hashing path if handle could not be obtained
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
@@ -110,7 +108,6 @@ impl RemoveTracker {
     }
 
     fn match_create(&mut self, path: &PathBuf, window: Duration) -> Option<PathBuf> {
-        #[cfg(not(windows))]
         if let Ok(h) = Handle::from_path(path) {
             if let Some((old, ts)) = self.map.remove(&h.ino()) {
                 if Instant::now().duration_since(ts) <= window {
@@ -121,7 +118,7 @@ impl RemoveTracker {
             }
         }
 
-        // fall back to hashing path when handle not available or on Windows
+        // fall back to hashing path when handle not available
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
