@@ -73,12 +73,12 @@ fn read_control(path: &Path) -> Result<ControlInfo> {
     Ok(serde_json::from_str(&txt)?)
 }
 
-fn process_alive(pid: u32) -> bool {
+fn process_alive(_pid: u32) -> bool {
     #[cfg(unix)]
     {
         use nix::sys::signal::kill;
         use nix::unistd::Pid;
-        kill(Pid::from_raw(pid as i32), None).is_ok()
+        kill(Pid::from_raw(_pid as i32), None).is_ok()
     }
     #[cfg(not(unix))]
     {
