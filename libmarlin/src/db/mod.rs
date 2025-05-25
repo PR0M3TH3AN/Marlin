@@ -50,6 +50,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "0006_drop_tags_canonical_id.sql",
         include_str!("migrations/0006_drop_tags_canonical_id.sql"),
     ),
+    (
+        "0007_fix_rename_trigger.sql",
+        include_str!("migrations/0007_fix_rename_trigger.sql"),
+    ),
 ];
 
 /* ─── schema helpers ─────────────────────────────────────────────── */
@@ -385,6 +389,39 @@ pub fn take_dirty(conn: &Connection) -> Result<Vec<i64>> {
     }
     conn.execute("DELETE FROM file_changes", [])?;
     Ok(ids)
+}
+
+/* ─── rename helpers ────────────────────────────────────────────── */
+
+pub fn update_file_path(conn: &Connection, old_path: &str, new_path: &str) -> Result<()> {
+    let file_id: i64 = conn.query_row("SELECT id FROM files WHERE path = ?1", [old_path], |r| {
+        r.get(0)
+    })?;
+    conn.execute(
+        "UPDATE files SET path = ?1 WHERE id = ?2",
+        params![new_path, file_id],
+    )?;
+    mark_dirty(conn, file_id)?;
+    Ok(())
+}
+
+pub fn rename_directory(conn: &mut Connection, old_dir: &str, new_dir: &str) -> Result<()> {
+    let like_pattern = format!("{}/%", old_dir.trim_end_matches('/'));
+    let ids = {
+        let mut stmt = conn.prepare("SELECT id FROM files WHERE path LIKE ?1")?;
+        let rows = stmt.query_map([&like_pattern], |r| r.get::<_, i64>(0))?;
+        rows.collect::<StdResult<Vec<_>, _>>()?
+    };
+    let tx = conn.transaction()?;
+    tx.execute(
+        "UPDATE files SET path = REPLACE(path, ?1, ?2) WHERE path LIKE ?3",
+        params![old_dir, new_dir, like_pattern],
+    )?;
+    for fid in ids {
+        mark_dirty(&tx, fid)?;
+    }
+    tx.commit()?;
+    Ok(())
 }
 
 /* ─── backup / restore helpers ────────────────────────────────────── */

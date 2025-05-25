@@ -46,7 +46,7 @@
 | Tarpaulin coverage gate    | S0             | —                    | –         |
 | Watch mode (FS events)     | Epic 1         | `marlin watch .`     | DP‑002    |
 | Backup auto‑prune          | Epic 1         | `backup --prune N`   | –         |
-| Rename/move tracking     | Epic 2         | automatic path update | Spec‑RMH |
+| ~~Rename/move tracking~~     | Epic 2         | automatic path update | Spec‑RMH |
 | Dirty‑scan                 | Epic 2         | `scan --dirty`       | DP‑002    |
 | Grep snippets              | Phase 3        | `search -C3 …`       | DP‑004    |
 | Hash / dedupe              | Phase 4        | `scan --rehash`      | DP‑005    |
@@ -75,7 +75,7 @@ Before a milestone is declared “shipped”:
 | - | ------------------------------ | ------ | ------------- |
 | ~~1~~ | ~~Crate split + CI baseline~~      | @alice | ~~26 May 25~~ |
 | ~~2~~ | ~~Tarpaulin + Hyperfine jobs~~     | @bob   | ~~26 May 25~~ |
-| 3 | **DP‑001 Schema v1.1** draft   | @carol | **30 May 25** |
+| ~~3~~ | ~~DP‑001 Schema v1.1 draft~~   | @carol | ~~30 May 25~~ |
 | ~~4~~ | ~~backup prune CLI + nightly job~~ | @dave  | ~~05 Jun 25~~ |
 
 > *This roadmap now contains both product-level “what” and engineering-level “how/when/prove it”.  It should allow a new contributor to jump in, pick the matching DP, and know exactly the bar they must clear for their code to merge.*  
