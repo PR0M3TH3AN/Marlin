@@ -188,8 +188,13 @@ pub fn ensure_tag_path(conn: &Connection, path: &str) -> Result<i64> {
 }
 
 pub fn file_id(conn: &Connection, path: &str) -> Result<i64> {
-    conn.query_row("SELECT id FROM files WHERE path = ?1", [path], |r| r.get(0))
-        .map_err(|_| anyhow::anyhow!("file not indexed: {}", path))
+    let path = to_db_path(path);
+    conn.query_row(
+        "SELECT id FROM files WHERE path = ?1",
+        [path.clone()],
+        |r| r.get(0),
+    )
+    .map_err(|_| anyhow::anyhow!("file not indexed: {}", path))
 }
 
 /* ─── attributes ──────────────────────────────────────────────────── */

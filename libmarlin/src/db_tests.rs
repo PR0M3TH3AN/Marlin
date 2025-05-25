@@ -193,7 +193,8 @@ fn backup_and_restore_cycle() {
 
     // backup
     let backup = db::backup(&db_path).unwrap();
-    // remove original
+    drop(live); // close connection on Windows
+                // remove original
     std::fs::remove_file(&db_path).unwrap();
     // restore
     db::restore(&backup, &db_path).unwrap();
