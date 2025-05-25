@@ -13,6 +13,7 @@ use notify::{
     event::{ModifyKind, RemoveKind, RenameMode},
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcherTrait,
 };
+#[cfg(not(windows))]
 use same_file::Handle;
 use std::collections::HashMap;
 use std::path::PathBuf;
