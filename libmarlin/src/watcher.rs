@@ -6,6 +6,7 @@
 //! watcher can be paused, resumed and shut down cleanly.
 
 use crate::db::{self, Database};
+use crate::utils::to_db_path;
 use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::{bounded, Receiver};
 use notify::{
@@ -479,8 +480,8 @@ impl FileWatcher {
                             // update DB for renames
                             if let EventKind::Modify(ModifyKind::Name(_)) = ev.kind {
                                 if let (Some(old_p), Some(new_p)) = (&ev.old_path, &ev.new_path) {
-                                    let old_s = old_p.to_string_lossy();
-                                    let new_s = new_p.to_string_lossy();
+                                    let old_s = to_db_path(old_p);
+                                    let new_s = to_db_path(new_p);
                                     let res =
                                         handle_db_update(db_mutex, &old_s, &new_s, new_p.is_dir());
                                     if let Err(e) = res {

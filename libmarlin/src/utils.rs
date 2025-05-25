@@ -1,6 +1,6 @@
 //! Misc shared helpers.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Determine a filesystem root to limit recursive walking on glob scans.
 ///
@@ -42,5 +42,21 @@ pub fn determine_scan_root(pattern: &str) -> PathBuf {
         PathBuf::from(".")
     } else {
         root
+    }
+}
+
+/// Convert a filesystem path to a normalized database path.
+///
+/// On Windows this replaces backslashes with forward slashes so that paths
+/// stored in the database are consistent across platforms.
+pub fn to_db_path<P: AsRef<Path>>(p: P) -> String {
+    let s = p.as_ref().to_string_lossy();
+    #[cfg(windows)]
+    {
+        s.replace('\\', "/")
+    }
+    #[cfg(not(windows))]
+    {
+        s.into_owned()
     }
 }
