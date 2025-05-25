@@ -4,6 +4,7 @@ use libmarlin::config::Config;
 use libmarlin::watcher::{WatcherConfig, WatcherState, WatcherStatus};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Write};
@@ -14,7 +15,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tracing::info;
-use serde_json;
 
 #[allow(dead_code)]
 static LAST_WATCHER_STATE: once_cell::sync::Lazy<Mutex<Option<WatcherState>>> =
@@ -162,7 +162,8 @@ pub fn run(cmd: &WatchCmd, _conn: &mut Connection, fmt: super::Format) -> Result
                         if buf.contains("status") {
                             if let Ok(st) = w_clone.lock().unwrap().status() {
                                 let dto = status_to_dto(st);
-                                let _ = s.write_all(serde_json::to_string(&dto).unwrap().as_bytes());
+                                let _ =
+                                    s.write_all(serde_json::to_string(&dto).unwrap().as_bytes());
                             }
                         } else if buf.contains("stop") {
                             let _ = s.write_all(b"ok");
