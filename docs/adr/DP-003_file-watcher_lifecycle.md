@@ -33,6 +33,7 @@ We'll implement a file-watcher system using the `notify` crate (which uses inoti
    - Batch database operations to minimize write transactions
    - Use the `--dirty` flag internally to optimize updates for changed files only
    - Implement a "catchup scan" on startup to handle changes that occurred while not watching
+   - Normalize all stored paths to use forward slashes (`/`) for portability
 
 4. **Backup & Pruning**:
    - Add `backup --prune N` to maintain only the N most recent backups
