@@ -109,7 +109,8 @@ struct RemoveTracker {
 impl RemoveTracker {
     fn record(&mut self, path: &PathBuf) {
         if let Ok(h) = Handle::from_path(path) {
-            self.map.insert(handle_key(&h), (path.clone(), Instant::now()));
+            self.map
+                .insert(handle_key(&h), (path.clone(), Instant::now()));
             return;
         }
 
