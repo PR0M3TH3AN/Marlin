@@ -18,6 +18,8 @@ use rusqlite::{
 use std::result::Result as StdResult;
 use tracing::{debug, info, warn};
 
+use crate::utils::to_db_path;
+
 /* ─── schema version ───────────────────────────────────────────────── */
 
 /// Current library schema version.
@@ -394,9 +396,13 @@ pub fn take_dirty(conn: &Connection) -> Result<Vec<i64>> {
 /* ─── rename helpers ────────────────────────────────────────────── */
 
 pub fn update_file_path(conn: &Connection, old_path: &str, new_path: &str) -> Result<()> {
-    let file_id: i64 = conn.query_row("SELECT id FROM files WHERE path = ?1", [old_path], |r| {
-        r.get(0)
-    })?;
+    let old_path = to_db_path(old_path);
+    let new_path = to_db_path(new_path);
+
+    let file_id: i64 =
+        conn.query_row("SELECT id FROM files WHERE path = ?1", [&old_path], |r| {
+            r.get(0)
+        })?;
     conn.execute(
         "UPDATE files SET path = ?1 WHERE id = ?2",
         params![new_path, file_id],
@@ -406,6 +412,8 @@ pub fn update_file_path(conn: &Connection, old_path: &str, new_path: &str) -> Re
 }
 
 pub fn rename_directory(conn: &mut Connection, old_dir: &str, new_dir: &str) -> Result<()> {
+    let old_dir = to_db_path(old_dir);
+    let new_dir = to_db_path(new_dir);
     let like_pattern = format!("{}/%", old_dir.trim_end_matches('/'));
     let ids = {
         let mut stmt = conn.prepare("SELECT id FROM files WHERE path LIKE ?1")?;

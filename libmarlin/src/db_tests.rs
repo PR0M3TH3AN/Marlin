@@ -1,6 +1,7 @@
 // libmarlin/src/db_tests.rs
 
 use super::db;
+use crate::utils::to_db_path;
 use rusqlite::Connection;
 use tempfile::tempdir;
 
@@ -283,7 +284,7 @@ fn tables_exist_and_fts_triggers() {
         .unwrap()
         .collect::<std::result::Result<Vec<_>, _>>()
         .unwrap();
-    assert!(hits_tag.contains(&file_path.to_string_lossy().into_owned()));
+    assert!(hits_tag.contains(&to_db_path(&file_path)));
 
     let hits_attr: Vec<String> = marlin
         .conn()
@@ -293,5 +294,5 @@ fn tables_exist_and_fts_triggers() {
         .unwrap()
         .collect::<std::result::Result<Vec<_>, _>>()
         .unwrap();
-    assert!(hits_attr.contains(&file_path.to_string_lossy().into_owned()));
+    assert!(hits_attr.contains(&to_db_path(&file_path)));
 }

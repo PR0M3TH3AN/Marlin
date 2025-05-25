@@ -6,6 +6,7 @@ mod tests {
     use crate::backup::BackupManager;
     // These are still from the watcher module
     use crate::db::open as open_marlin_db;
+    use crate::utils::to_db_path;
     use crate::watcher::{FileWatcher, WatcherConfig, WatcherState}; // Use your project's DB open function
     use crate::Marlin;
 
@@ -29,7 +30,7 @@ mod tests {
                 .conn()
                 .query_row(
                     "SELECT COUNT(*) FROM files WHERE path = ?1",
-                    [path.to_string_lossy()],
+                    [to_db_path(path)],
                     |r| r.get(0),
                 )
                 .unwrap();
@@ -211,7 +212,7 @@ mod tests {
             .conn()
             .query_row(
                 "SELECT COUNT(*) FROM files WHERE path = ?1",
-                [new_file.to_string_lossy()],
+                [to_db_path(&new_file)],
                 |r| r.get(0),
             )
             .unwrap();
@@ -262,7 +263,7 @@ mod tests {
                 .conn()
                 .query_row(
                     "SELECT COUNT(*) FROM files WHERE path = ?1",
-                    [p.to_string_lossy()],
+                    [to_db_path(&p)],
                     |r| r.get(0),
                 )
                 .unwrap();

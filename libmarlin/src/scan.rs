@@ -3,6 +3,8 @@
 use std::fs;
 use std::path::Path;
 
+use crate::utils::to_db_path;
+
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use tracing::{debug, info};
@@ -51,7 +53,7 @@ pub fn scan_directory(conn: &mut Connection, root: &Path) -> Result<usize> {
             .as_secs() as i64;
 
         // Execute the upsert
-        let path_str = path.to_string_lossy();
+        let path_str = to_db_path(path);
         stmt.execute(params![path_str, size, mtime])?;
         count += 1;
 
