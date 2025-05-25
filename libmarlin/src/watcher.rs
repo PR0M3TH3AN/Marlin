@@ -86,6 +86,21 @@ struct EventDebouncer {
     last_flush: Instant,
 }
 
+#[cfg(any(target_os = "redox", unix))]
+fn handle_key(h: &Handle) -> u64 {
+    h.ino()
+}
+
+#[cfg(not(any(target_os = "redox", unix)))]
+fn handle_key(h: &Handle) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    h.hash(&mut hasher);
+    hasher.finish()
+}
+
 #[derive(Default)]
 struct RemoveTracker {
     map: HashMap<u64, (PathBuf, Instant)>,
@@ -94,7 +109,7 @@ struct RemoveTracker {
 impl RemoveTracker {
     fn record(&mut self, path: &PathBuf) {
         if let Ok(h) = Handle::from_path(path) {
-            self.map.insert(h.ino(), (path.clone(), Instant::now()));
+            self.map.insert(handle_key(&h), (path.clone(), Instant::now()));
             return;
         }
 
@@ -109,7 +124,7 @@ impl RemoveTracker {
 
     fn match_create(&mut self, path: &PathBuf, window: Duration) -> Option<PathBuf> {
         if let Ok(h) = Handle::from_path(path) {
-            if let Some((old, ts)) = self.map.remove(&h.ino()) {
+            if let Some((old, ts)) = self.map.remove(&handle_key(&h)) {
                 if Instant::now().duration_since(ts) <= window {
                     return Some(old);
                 } else {
@@ -136,7 +151,7 @@ impl RemoveTracker {
     fn flush_expired(&mut self, window: Duration, debouncer: &mut EventDebouncer) {
         let now = Instant::now();
         let mut expired = Vec::new();
-        for (ino, (path, ts)) in &self.map {
+        for (key, (path, ts)) in &self.map {
             if now.duration_since(*ts) > window {
                 debouncer.add_event(ProcessedEvent {
                     path: path.clone(),
@@ -146,11 +161,11 @@ impl RemoveTracker {
                     priority: EventPriority::Delete,
                     timestamp: *ts,
                 });
-                expired.push(*ino);
+                expired.push(*key);
             }
         }
-        for ino in expired {
-            self.map.remove(&ino);
+        for key in expired {
+            self.map.remove(&key);
         }
     }
 }
