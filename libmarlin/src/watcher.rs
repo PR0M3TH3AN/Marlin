@@ -158,16 +158,25 @@ impl EventDebouncer {
                 .retain(|p, _| !p.starts_with(&path) || p == &path);
         }
 
-        match self.events.get_mut(&path) {
-            Some(existing) => {
+        use std::collections::hash_map::Entry;
+
+        match self.events.entry(path) {
+            Entry::Occupied(mut o) => {
+                let existing = o.get_mut();
                 if event.priority < existing.priority {
                     existing.priority = event.priority;
                 }
                 existing.kind = event.kind;
                 existing.timestamp = event.timestamp;
+                if let Some(old_p) = event.old_path {
+                    existing.old_path = Some(old_p);
+                }
+                if let Some(new_p) = event.new_path {
+                    existing.new_path = Some(new_p);
+                }
             }
-            None => {
-                self.events.insert(path, event);
+            Entry::Vacant(v) => {
+                v.insert(event);
             }
         }
     }
