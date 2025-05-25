@@ -678,6 +678,7 @@ dependencies = [
  "glob",
  "libc",
  "libmarlin",
+ "nix",
  "once_cell",
  "predicates",
  "rusqlite",
