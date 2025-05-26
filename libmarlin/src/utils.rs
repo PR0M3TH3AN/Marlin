@@ -45,9 +45,20 @@ pub fn determine_scan_root(pattern: &str) -> PathBuf {
     }
 }
 
-/// Canonicalize a path, falling back to the original on error.
+// 🔧 merged conflicting changes from codex/fix-windows-rename-handling-in-tests vs beta
+/// Canonicalize a path, stripping any Windows device prefix ("\\?\") and
+/// falling back to the original on error.
 pub fn canonicalize_lossy<P: AsRef<Path>>(p: P) -> PathBuf {
-    std::fs::canonicalize(&p).unwrap_or_else(|_| p.as_ref().to_path_buf())
+    let path = std::fs::canonicalize(&p).unwrap_or_else(|_| p.as_ref().to_path_buf());
+    #[cfg(windows)]
+    {
+        const VERBATIM_PREFIX: &str = "\\\\?\\";
+        let s = path.to_string_lossy();
+        if let Some(stripped) = s.strip_prefix(VERBATIM_PREFIX) {
+            return PathBuf::from(stripped);
+        }
+    }
+    path
 }
 
 /// Convert a filesystem path to a normalized database path.
@@ -66,3 +77,4 @@ pub fn to_db_path<P: AsRef<Path>>(p: P) -> String {
         s.into_owned()
     }
 }
+
