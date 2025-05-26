@@ -6,7 +6,7 @@ mod tests {
     use crate::backup::BackupManager;
     // These are still from the watcher module
     use crate::db::open as open_marlin_db;
-    use crate::utils::to_db_path;
+    use crate::utils::{canonicalize_lossy, to_db_path};
     use crate::watcher::{FileWatcher, WatcherConfig, WatcherState}; // Use your project's DB open function
     use crate::Marlin;
 
@@ -24,13 +24,14 @@ mod tests {
         expected: i64,
         timeout: Duration,
     ) {
+        let target = canonicalize_lossy(path);
         let start = Instant::now();
         loop {
             let count: i64 = marlin
                 .conn()
                 .query_row(
                     "SELECT COUNT(*) FROM files WHERE path = ?1",
-                    [to_db_path(path)],
+                    [to_db_path(&target)],
                     |r| r.get(0),
                 )
                 .unwrap();
@@ -201,6 +202,7 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         let new_file = dir.join("b.txt");
         fs::rename(&file, &new_file).unwrap();
+        let new_file = canonicalize_lossy(&new_file);
         wait_for_row_count(&marlin, &new_file, 1, Duration::from_secs(10));
         watcher.stop().unwrap();
         assert!(
@@ -247,6 +249,7 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         let new = dir.join("newdir");
         fs::rename(&sub, &new).unwrap();
+        let new = canonicalize_lossy(&new);
         for fname in ["one.txt", "two.txt"] {
             let p = new.join(fname);
             wait_for_row_count(&marlin, &p, 1, Duration::from_secs(10));
