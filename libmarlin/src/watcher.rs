@@ -6,7 +6,7 @@
 //! watcher can be paused, resumed and shut down cleanly.
 
 use crate::db::{self, Database};
-use crate::utils::to_db_path;
+use crate::utils::{canonicalize_lossy, to_db_path};
 use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::{bounded, Receiver};
 use notify::{
@@ -256,13 +256,20 @@ impl FileWatcher {
         // ── start actual OS watcher ───────────────────────────────────────────
         let event_tx = tx.clone();
         let mut actual_watcher = RecommendedWatcher::new(
-            move |ev| {
+            move |ev: Result<Event, notify::Error>| {
+                let ev = ev.map(|mut e| {
+                    for p in &mut e.paths {
+                        *p = canonicalize_lossy(&*p);
+                    }
+                    e
+                });
                 let _ = event_tx.send(ev);
             },
             notify::Config::default(),
         )?;
 
-        for p in &paths {
+        let canonical_paths: Vec<PathBuf> = paths.iter().map(canonicalize_lossy).collect();
+        for p in &canonical_paths {
             actual_watcher
                 .watch(p, RecursiveMode::Recursive)
                 .with_context(|| format!("Failed to watch path {}", p.display()))?;
@@ -532,7 +539,7 @@ impl FileWatcher {
         Ok(Self {
             state,
             _config: config,
-            watched_paths: paths,
+            watched_paths: canonical_paths,
             _event_receiver: rx,
             _watcher: actual_watcher,
             processor_thread: Some(processor_thread),
