@@ -45,6 +45,7 @@ pub fn determine_scan_root(pattern: &str) -> PathBuf {
     }
 }
 
+// 🔧 merged conflicting changes from codex/fix-windows-rename-handling-in-tests vs beta
 /// Canonicalize a path, stripping any Windows device prefix ("\\?\") and
 /// falling back to the original on error.
 pub fn canonicalize_lossy<P: AsRef<Path>>(p: P) -> PathBuf {
@@ -76,3 +77,4 @@ pub fn to_db_path<P: AsRef<Path>>(p: P) -> String {
         s.into_owned()
     }
 }
+
