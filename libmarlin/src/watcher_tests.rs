@@ -1,17 +1,13 @@
+#![deny(warnings)]
 //! Tests for the file system watcher functionality
 
 #[cfg(test)]
 mod tests {
-    // Updated import for BackupManager from the new backup module
-    use crate::backup::BackupManager;
-    // These are still from the watcher module
-    use crate::db::open as open_marlin_db;
     use crate::utils::{canonicalize_lossy, to_db_path};
-    use crate::watcher::{FileWatcher, WatcherConfig, WatcherState}; // Use your project's DB open function
+    use crate::watcher::WatcherConfig;
     use crate::Marlin;
 
-    use std::fs::{self, File};
-    use std::io::Write;
+    use std::fs;
     use std::thread;
     use std::time::{Duration, Instant};
     use tempfile::tempdir;
@@ -82,7 +78,6 @@ mod tests {
         let new_file = dir.join("b.txt");
         fs::rename(&file, &new_file).unwrap();
 
-        // 🔧 merged conflicting changes from feature-X vs main
         let new_file_canonical = canonicalize_lossy(&new_file);
         wait_for_row_count(&marlin, &new_file_canonical, 1, Duration::from_secs(10));
 
@@ -158,4 +153,3 @@ mod tests {
         }
     }
 }
-
