@@ -45,12 +45,18 @@ pub fn determine_scan_root(pattern: &str) -> PathBuf {
     }
 }
 
+/// Canonicalize a path, falling back to the original on error.
+pub fn canonicalize_lossy<P: AsRef<Path>>(p: P) -> PathBuf {
+    std::fs::canonicalize(&p).unwrap_or_else(|_| p.as_ref().to_path_buf())
+}
+
 /// Convert a filesystem path to a normalized database path.
 ///
 /// On Windows this replaces backslashes with forward slashes so that paths
 /// stored in the database are consistent across platforms.
 pub fn to_db_path<P: AsRef<Path>>(p: P) -> String {
-    let s = p.as_ref().to_string_lossy();
+    let canonical = canonicalize_lossy(p);
+    let s = canonical.to_string_lossy();
     #[cfg(windows)]
     {
         s.replace('\\', "/")
