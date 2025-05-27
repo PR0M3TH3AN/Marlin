@@ -5,15 +5,16 @@
 //! event-debouncing, batch processing and a small state-machine so that the
 //! watcher can be paused, resumed and shut down cleanly.
 
-use crate::db::{self, Database};
+use crate::db::Database;
 use crate::utils::{canonicalize_lossy, to_db_path};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use crossbeam_channel::{bounded, Receiver};
 use notify::{
     event::{ModifyKind, RemoveKind, RenameMode},
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcherTrait,
 };
 use same_file::Handle;
+use rusqlite::params;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -294,11 +295,19 @@ impl FileWatcher {
             new_s: &str,
             is_dir: bool,
         ) -> Result<()> {
-            let mut guard = db_mutex.lock().map_err(|_| anyhow!("db mutex poisoned"))?;
+            let mut guard = db_mutex.lock().expect("db mutex poisoned");
+            let conn = guard.conn_mut();
             if is_dir {
-                db::rename_directory(guard.conn_mut(), old_s, new_s)?;
+                let like = format!("{}%", old_s);
+                conn.execute(
+                    "UPDATE files SET path = REPLACE(path, ?1, ?2) WHERE path LIKE ?3",
+                    params![old_s, new_s, like],
+                )?;
             } else {
-                db::update_file_path(guard.conn_mut(), old_s, new_s)?;
+                conn.execute(
+                    "UPDATE files SET path = ?1 WHERE path = ?2",
+                    params![new_s, old_s],
+                )?;
             }
             Ok(())
         }
