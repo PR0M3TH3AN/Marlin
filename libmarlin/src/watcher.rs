@@ -5,7 +5,7 @@
 //! event-debouncing, batch processing and a small state-machine so that the
 //! watcher can be paused, resumed and shut down cleanly.
 
-use crate::db::{self, Database};
+use crate::db::Database;
 use crate::utils::{canonicalize_lossy, to_db_path};
 use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::{bounded, Receiver};
@@ -293,12 +293,27 @@ impl FileWatcher {
             new_s: &str,
             is_dir: bool,
         ) -> Result<()> {
+            use rusqlite::params;
+
             let mut guard = db_mutex.lock().map_err(|_| anyhow!("db mutex poisoned"))?;
+            let conn = guard.conn_mut();
+
             if is_dir {
-                db::rename_directory(guard.conn_mut(), old_s, new_s)?;
+                let old_prefix = format!("{}/", old_s.trim_end_matches('/'));
+                let new_prefix = format!("{}/", new_s.trim_end_matches('/'));
+                let like_pattern = format!("{}%", old_prefix);
+                conn.execute(
+                    "UPDATE files SET path = REPLACE(path, ?1, ?2) WHERE path LIKE ?3",
+                    params![old_prefix, new_prefix, like_pattern],
+                )?;
             } else {
-                db::update_file_path(guard.conn_mut(), old_s, new_s)?;
+                conn.execute(
+                    "UPDATE files SET path = ?1 WHERE path = ?2",
+                    params![new_s, old_s],
+                )?;
             }
+
+            conn.execute("PRAGMA optimize", [])?; // keep FTS in sync
             Ok(())
         }
 
