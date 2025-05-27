@@ -86,6 +86,7 @@ jobs:
           toolchain: stable
           override: true
           profile: minimal
+          components: rustfmt, clippy
 
       - name: Check formatting
         run: cargo fmt -- --check
