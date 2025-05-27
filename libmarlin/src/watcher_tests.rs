@@ -25,12 +25,13 @@ mod tests {
         timeout: Duration,
     ) {
         let start = Instant::now();
+        let target = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
         loop {
             let count: i64 = marlin
                 .conn()
                 .query_row(
                     "SELECT COUNT(*) FROM files WHERE path = ?1",
-                    [to_db_path(path)],
+                    [to_db_path(&target)],
                     |r| r.get(0),
                 )
                 .unwrap();
@@ -201,7 +202,8 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         let new_file = dir.join("b.txt");
         fs::rename(&file, &new_file).unwrap();
-        wait_for_row_count(&marlin, &new_file, 1, Duration::from_secs(10));
+        let canon_new_file = std::fs::canonicalize(&new_file).unwrap_or(new_file.clone());
+        wait_for_row_count(&marlin, &canon_new_file, 1, Duration::from_secs(10));
         watcher.stop().unwrap();
         assert!(
             watcher.status().unwrap().events_processed > 0,
@@ -249,7 +251,8 @@ mod tests {
         fs::rename(&sub, &new).unwrap();
         for fname in ["one.txt", "two.txt"] {
             let p = new.join(fname);
-            wait_for_row_count(&marlin, &p, 1, Duration::from_secs(10));
+            let canon_p = std::fs::canonicalize(&p).unwrap_or(p.clone());
+            wait_for_row_count(&marlin, &canon_p, 1, Duration::from_secs(10));
         }
         watcher.stop().unwrap();
         assert!(
