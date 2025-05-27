@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tracing::info;
+use rusqlite::params;
 
 // ────── configuration ─────────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
@@ -341,6 +342,44 @@ impl FileWatcher {
 
                             // ── per-event logic ───────────────────────────────
                             match event.kind {
+                                // direct two-path rename notification
+                                EventKind::Modify(ModifyKind::Name(RenameMode::Both))
+                                    if event.paths.len() == 2 =>
+                                {
+                                    if let Some(db_mutex) =
+                                        db_for_thread.lock().ok().and_then(|g| g.clone())
+                                    {
+                                        let old = canonicalize_lossy(&event.paths[0]);
+                                        let new = canonicalize_lossy(&event.paths[1]);
+                                        let old_db = to_db_path(&old);
+                                        let new_db = to_db_path(&new);
+                                        let mut guard =
+                                            db_mutex.lock().expect("db mutex poisoned");
+                                        let tx = guard.conn_mut().transaction().unwrap();
+                                        if old.is_dir() {
+                                            let old_prefix = format!("{}/", old_db);
+                                            let new_prefix = format!("{}/", new_db);
+                                            tx.execute(
+                                                "UPDATE files SET path = REPLACE(path, ?1, ?2) WHERE path LIKE ?3",
+                                                params![
+                                                    old_prefix,
+                                                    new_prefix,
+                                                    format!("{}%", old_prefix)
+                                                ],
+                                            )
+                                            .unwrap();
+                                        } else {
+                                            tx.execute(
+                                                "UPDATE files SET path = ?1 WHERE path = ?2",
+                                                params![new_db, old_db],
+                                            )
+                                            .unwrap();
+                                        }
+                                        tx.commit().unwrap();
+                                    }
+                                    continue;
+                                }
+
                                 // 1. remove-then-create → rename heuristic using inode
                                 EventKind::Remove(_) if event.paths.len() == 1 => {
                                     remove_tracker.record(&event.paths[0]);
