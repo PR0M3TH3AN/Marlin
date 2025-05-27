@@ -22,7 +22,6 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 use tracing::info;
-use rusqlite::params;
 
 // ────── configuration ─────────────────────────────────────────────────────────
 #[derive(Debug, Clone)]
@@ -295,13 +294,17 @@ impl FileWatcher {
             new_s: &str,
             is_dir: bool,
         ) -> Result<()> {
-            let mut guard = db_mutex.lock().expect("db mutex poisoned");
+            // 🔧 merged conflicting changes from codex/handle-rename-event-and-update-sqlite-table vs beta
+            let mut guard = db_mutex.lock().context("db mutex poisoned")?;
             let conn = guard.conn_mut();
+
             if is_dir {
-                let like = format!("{}%", old_s);
+                let old_prefix = format!("{}/", old_s.trim_end_matches('/'));
+                let new_prefix = format!("{}/", new_s.trim_end_matches('/'));
+                let like_pattern = format!("{}%", old_prefix);
                 conn.execute(
                     "UPDATE files SET path = REPLACE(path, ?1, ?2) WHERE path LIKE ?3",
-                    params![old_s, new_s, like],
+                    params![old_prefix, new_prefix, like_pattern],
                 )?;
             } else {
                 conn.execute(
@@ -309,6 +312,8 @@ impl FileWatcher {
                     params![new_s, old_s],
                 )?;
             }
+
+            conn.execute("PRAGMA optimize", [])?;
             Ok(())
         }
 
