@@ -77,4 +77,3 @@ pub fn to_db_path<P: AsRef<Path>>(p: P) -> String {
         s.into_owned()
     }
 }
-
