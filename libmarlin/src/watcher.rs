@@ -7,13 +7,14 @@
 
 use crate::db::Database;
 use crate::utils::{canonicalize_lossy, to_db_path};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use crossbeam_channel::{bounded, Receiver};
 use notify::{
     event::{ModifyKind, RemoveKind, RenameMode},
     Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher as NotifyWatcherTrait,
 };
 use same_file::Handle;
+use rusqlite::params;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -293,9 +294,8 @@ impl FileWatcher {
             new_s: &str,
             is_dir: bool,
         ) -> Result<()> {
-            use rusqlite::params;
-
-            let mut guard = db_mutex.lock().map_err(|_| anyhow!("db mutex poisoned"))?;
+            // 🔧 merged conflicting changes from codex/handle-rename-event-and-update-sqlite-table vs beta
+            let mut guard = db_mutex.lock().context("db mutex poisoned")?;
             let conn = guard.conn_mut();
 
             if is_dir {
@@ -313,7 +313,7 @@ impl FileWatcher {
                 )?;
             }
 
-            conn.execute("PRAGMA optimize", [])?; // keep FTS in sync
+            conn.execute("PRAGMA optimize", [])?;
             Ok(())
         }
 
@@ -356,6 +356,44 @@ impl FileWatcher {
 
                             // ── per-event logic ───────────────────────────────
                             match event.kind {
+                                // direct two-path rename notification
+                                EventKind::Modify(ModifyKind::Name(RenameMode::Both))
+                                    if event.paths.len() == 2 =>
+                                {
+                                    if let Some(db_mutex) =
+                                        db_for_thread.lock().ok().and_then(|g| g.clone())
+                                    {
+                                        let old = canonicalize_lossy(&event.paths[0]);
+                                        let new = canonicalize_lossy(&event.paths[1]);
+                                        let old_db = to_db_path(&old);
+                                        let new_db = to_db_path(&new);
+                                        let mut guard =
+                                            db_mutex.lock().expect("db mutex poisoned");
+                                        let tx = guard.conn_mut().transaction().unwrap();
+                                        if old.is_dir() {
+                                            let old_prefix = format!("{}/", old_db);
+                                            let new_prefix = format!("{}/", new_db);
+                                            tx.execute(
+                                                "UPDATE files SET path = REPLACE(path, ?1, ?2) WHERE path LIKE ?3",
+                                                params![
+                                                    old_prefix,
+                                                    new_prefix,
+                                                    format!("{}%", old_prefix)
+                                                ],
+                                            )
+                                            .unwrap();
+                                        } else {
+                                            tx.execute(
+                                                "UPDATE files SET path = ?1 WHERE path = ?2",
+                                                params![new_db, old_db],
+                                            )
+                                            .unwrap();
+                                        }
+                                        tx.commit().unwrap();
+                                    }
+                                    continue;
+                                }
+
                                 // 1. remove-then-create → rename heuristic using inode
                                 EventKind::Remove(_) if event.paths.len() == 1 => {
                                     remove_tracker.record(&event.paths[0]);
